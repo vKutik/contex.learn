@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- A bare page for driving one component in a real browser.
+     It is not part of the app: index.html never references it, and nothing
+     in js/ knows it exists. It loads the app's own stylesheets so a rendered
+     component is measured the way a learner would see it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>component harness</title>
+<link rel="stylesheet" href="/styles/main.css">
+<link rel="stylesheet" href="/styles/components.css">
+<link rel="stylesheet" href="/styles/reading.css">
+</head>
+<body>
+<div class="wrap"><main id="screen"><div id="stage"></div></main></div>
+<div id="tooltip-layer"></div>
+</body>
+</html>
