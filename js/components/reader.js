@@ -37,11 +37,14 @@ export function initReader(container, passage, dict, famOf){
       e.stopPropagation();
       const word = dict.get(el.dataset.word);
       if(!word) return;
+      // a passage's own sense wins over the card's when this text uses the
+      // word differently - see the polysemy note in js/data/passages.js
+      const sense = (passage.w === word.id && passage.sense) ? passage.sense : word.definition;
       // translation is on the word object but left out of the tooltip for now
       showTooltip(el, {
         title: `${word.word} /${word.ipa}/`,
         say: { id: word.id, word: word.word },
-        hint: word.definition
+        hint: sense
       });
     };
 

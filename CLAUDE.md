@@ -107,7 +107,7 @@ is not part of the app and nothing references it.
 ```js
 word     { id, word, pos, ipa, translation, definition, opposite, examples[] }
 lesson   { id, title, wordIds[5], text, quiz[] }
-passage  { id, w, slot, also[], text, source }
+passage  { id, w, slot, also[], text, sense?, source }
 question { type, question, options[], correctIndex }      // lesson quiz
 ```
 
@@ -118,6 +118,9 @@ question { type, question, options[], correctIndex }      // lesson quiz
   as a headword in `words.js`.
 - `passage.w` is the word the passage belongs to; `slot` is 0–9 on that
   word's shelf; `also` lists other course words it happens to contain.
+- `passage.sense` is set only when this passage's own word is used in a
+  sense the card doesn't teach; the tooltip and the reading check show it
+  instead of the card's definition. See "Known open problem — polysemy".
 
 ### Persisted state (`localStorage`, key `vocab-progress`)
 

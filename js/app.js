@@ -13,7 +13,7 @@ import { say } from './components/audio.js';
 import { pronunciations } from './data/pronunciation.js';
 import { renderReview } from './components/review.js';
 import { initReader, dictOf } from './components/reader.js';
-import { runQuiz, questionFor, anyQuestion, gapQuestion } from './components/quiz.js';
+import { runQuiz, questionFor, anyQuestion, gapQuestion, passageFocusQuestion } from './components/quiz.js';
 import { exampleOf, markedOf } from './components/word.js';
 import { hideTooltip } from './components/tooltip.js';
 import { paint, easeIn } from './components/motion.js';
@@ -339,9 +339,12 @@ function anyIntroduced(skip = null){
 }
 routes.readingQuiz = ({ id }) => {
   const passage = passages[id];
+  const word = wordById(passage.w);
   // one check on the word this text belongs to; the mechanic follows the
-  // text's place on the shelf, so five texts give five different angles
-  const questions = [questionFor(wordById(passage.w), words, passage.slot)];
+  // text's place on the shelf, so five texts give five different angles -
+  // unless this passage uses a sense its card doesn't teach, in which case
+  // the check has to be about the sense the text actually showed
+  const questions = [passage.sense ? passageFocusQuestion(word, passage) : questionFor(word, words, passage.slot)];
   screen().innerHTML = '<div id="stage"></div>';
   runQuiz(screen().querySelector('#stage'), questions, {
     // getting it right from the passage alone is what turns a word amber

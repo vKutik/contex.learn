@@ -160,6 +160,28 @@ function focusQuestion(word, allWords){
   };
 }
 
+/* ---------- 4. Passage-sense focus ---------- */
+/** Some passages use a word in a sense its card doesn't teach - `passage.sense`
+ *  carries what it actually means there (see js/data/passages.js). For those,
+ *  the reading check must test *that* sense, not the card's, so it asks about
+ *  the passage's own text instead of drawing a fresh sentence from the card. */
+export function passageFocusQuestion(word, passage){
+  const truthful = Math.random() < 0.5;
+  const claim = truthful ? passage.sense : word.definition;
+
+  return {
+    kind: 'focus',
+    wordId: word.id,
+    prompt: passage.text,
+    claim,
+    options: ['Yes, it fits', 'No, it does not'],
+    correctIndex: truthful ? 0 : 1,
+    explain: truthful
+      ? `<b>${word.word}</b> here means: ${passage.sense}`
+      : `<b>${word.word}</b> here actually means: ${passage.sense}`
+  };
+}
+
 /* ---------- choosing a mechanic ---------- */
 const MECHANICS = [gapQuestion, matchQuestion, focusQuestion];
 
