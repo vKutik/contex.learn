@@ -68,6 +68,10 @@ version.txt                the deployed build id (see "Deploying")
 tools_stamp.py             writes the build id into js/build.js + version.txt
 .nojekyll                  REQUIRED — see "Deploying"
 audio/                     100 pronunciation recordings, one per word
+tests/                     the deploy gate; not served, not part of the app
+  run.mjs                  one command, one exit code
+  helpers/                 isolation, seeding, the static server, Playwright
+  unit/ data/ deploy/ e2e/ the four suites
 styles/
   main.css                 tokens, page, typography, motion, transitions
   components.css           buttons, cards, gauge, quiz options, word rows
@@ -197,6 +201,22 @@ python3 -m http.server 8000     # then open http://localhost:8000
 are available. Drive every screen you touched and assert on what the page
 actually renders. Measure claims before making them — several bugs in this
 codebase survived because they looked correct in the source.
+
+**Run the gate before every deploy.**
+
+```bash
+node tests/run.mjs            # 196 tests, about 20 seconds
+```
+
+Four suites, cheapest first: `unit/` for the logic, `data/` for the contract
+`js/data/` has to keep, `deploy/` for "would this tree work on Pages", `e2e/`
+for the app as a learner meets it, in real Chromium. Green is the condition
+for pushing. A new feature arrives with its tests; `tests/README.md` has the
+rules for writing them, the first of which is that a test run can never reach
+a learner's saved progress.
+
+`deploy/` already checks both traps below, but knowing why they are there is
+still the difference between fixing one and re-discovering it.
 
 **Deploying — two traps that cost real debugging time:**
 
