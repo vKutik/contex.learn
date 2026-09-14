@@ -129,6 +129,7 @@ function lessonCards(lesson, ws, i){
   renderFlashcard(screen().querySelector('#stage'), word,
     { label:`New word ${i+1} of ${ws.length}`,
       fam: srs.familiarity(word.id, textsRead(word.id)),
+      isNew: !store.getWord(word.id),
       next: i === ws.length-1 ? 'Try them from memory' : 'Got it' },
     {
       onNext: async () => {

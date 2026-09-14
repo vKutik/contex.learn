@@ -57,6 +57,9 @@ button{font:inherit;cursor:pointer;border-radius:5px}
 .def{font-size:1.05rem;font-weight:450;margin-bottom:12px}
 .uk{font-size:1.05rem;font-weight:520;color:var(--green-d);margin-bottom:12px}
 .anto{font-size:.95rem;color:var(--soft)}
+/* the plain-scene hint: quieter than .ex - no box, no border, no fill.
+   A hint, not a second definition. */
+.plain{font-size:.95rem;color:var(--soft);margin-bottom:10px}
 .exnav{font-size:.8rem;color:var(--soft);margin-top:2px}
 
 /* ---------- quiz ---------- */

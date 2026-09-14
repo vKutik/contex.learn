@@ -30,6 +30,14 @@ export const blankOf = ex => ex.replace(MARKER, '<u> </u>');
 export const markedOf = (ex, text) =>
   ex.replace(MARKER, (_, m) => `<mark>${text ?? m}</mark>`);
 
+/* ---------- the plain-scene hint for abstract words ---------- */
+/** A quiet, wordless retelling of the card's first example - shown once,
+ *  the very first time a word is met, so an abstract word (`cheerful`,
+ *  `grief`) gets a picture the way a concrete one already has. Optional:
+ *  most words have no `plain` field and this returns nothing for them. */
+const plainOf = (word, isNew) =>
+  (isNew && word.plain) ? `<div class="plain">${word.plain}</div>` : '';
+
 /* ---------- which example a word is showing ---------- */
 export const exampleOf = word => word.examples[store.getExample(word.id) % word.examples.length];
 const exampleNo = word => (store.getExample(word.id) % word.examples.length) + 1;
@@ -40,15 +48,17 @@ const nextExample = word =>
 /**
  * @param {object} word
  * @param {{level:number,cooling:boolean}} [fam] from srs.familiarity()
+ * @param {boolean} [isNew] the learner is meeting this word for the first time
  * @returns {string} markup for the inside of a card
  */
-export const wordFace = (word, fam) => `
+export const wordFace = (word, fam, isNew = false) => `
   <div class="word">${word.word}${fam ? familiarityDots(fam) : ''}</div>
   <div class="pos">/${word.ipa}/ · ${word.pos}</div>
   <button class="say" data-say>🔊 listen</button>
   <!-- word.translation exists on every word (see js/data/words.js) but is
        hidden in the UI for now, per request - data stays, display doesn't. -->
   <div class="def">${word.definition}</div>
+  ${plainOf(word, isNew)}
   <div class="ex">${markedOf(exampleOf(word))}</div>
   ${word.opposite !== '—' ? `<div class="anto">opposite: ${word.opposite}</div>` : ''}
   <div class="exnav">example ${exampleNo(word)} of ${word.examples.length}</div>`;

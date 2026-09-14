@@ -10,13 +10,13 @@ import { wordFace, wireWordFace } from './word.js';
 /**
  * @param {HTMLElement} container
  * @param {object} word
- * @param {{label:string, next:string, fam?:object}} pos
+ * @param {{label:string, next:string, fam?:object, isNew?:boolean}} pos
  * @param {{onNext:Function, onRerender:Function}} handlers
  */
 export function renderFlashcard(container, word, pos, handlers){
   container.innerHTML = `
     <div class="top"><span class="pill">${pos.label}</span></div>
-    <div class="card">${wordFace(word, pos.fam)}</div>
+    <div class="card">${wordFace(word, pos.fam, pos.isNew)}</div>
     <button class="go" id="next">${pos.next}</button>
     <button class="go ghost" data-alt>Show another example</button>`;
 

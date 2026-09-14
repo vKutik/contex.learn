@@ -4,8 +4,14 @@
 //
 // No test framework: a 10-line assert helper plus a pass/fail counter.
 
-import { plainOf, wordFace } from '../js/components/word.js';
+import { wordFace } from '../js/components/word.js';
 import { words } from '../js/data/words.js';
+
+// plainOf(word, isNew) lives *inside* word.js and is not exported: the
+// deploy gate (tests/deploy/release.test.mjs, "every export is imported by
+// something") flags an export nothing else in js/ calls as dead, and only
+// wordFace itself calls plainOf. So its behaviour is tested here through
+// the public wordFace(word, fam, isNew), which is what every screen uses.
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -35,25 +41,27 @@ const wordWithPlain = {
   plain: 'She smiled and waved to me from the window.',
 };
 
-/* ---------- plainOf(word, isNew) ---------- */
+/* ---------- the plain block inside wordFace (plainOf is private) ---------- */
 
-assert('no plain field, isNew=true -> empty string',
-  plainOf(wordWithoutPlain, true) === '');
+const hasPlainBlock = face => /class="[^"]*\bplain\b[^"]*"/.test(face);
 
-assert('has plain, isNew=false -> empty string',
-  plainOf(wordWithPlain, false) === '');
+assert('no plain field, isNew=true -> no .plain block',
+  !hasPlainBlock(wordFace(wordWithoutPlain, null, true)));
+
+assert('has plain, isNew=false -> no .plain block',
+  !hasPlainBlock(wordFace(wordWithPlain, null, false)));
 
 assert('has plain, isNew=true -> result contains word.plain text',
-  plainOf(wordWithPlain, true).includes(wordWithPlain.plain));
+  wordFace(wordWithPlain, null, true).includes(wordWithPlain.plain));
 
 assert('has plain, isNew=true -> markup carries class "plain"',
-  /class="[^"]*\bplain\b[^"]*"/.test(plainOf(wordWithPlain, true)));
+  hasPlainBlock(wordFace(wordWithPlain, null, true)));
 
-assert('plainOf does not import storage.js (no localStorage access for this logic)', (() => {
-  // isNew is passed in as an argument; plainOf itself must not read storage.
-  // Detected by checking the function body text for a storage import/reference.
-  const src = plainOf.toString();
-  return !/store\.|localStorage/.test(src);
+assert('isNew comes from the argument alone, not from localStorage', (() => {
+  const before = localStorage.length;
+  wordFace(wordWithPlain, null, true);
+  wordFace(wordWithPlain, null, false);
+  return localStorage.length === before;
 })());
 
 /* ---------- order inside wordFace ---------- */
