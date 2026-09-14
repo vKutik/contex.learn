@@ -42,6 +42,12 @@ const wordWithPlain = {
 };
 
 /* ---------- the plain block inside wordFace (plainOf is private) ---------- */
+// plain only shows on the first example (see plainOf's comment in word.js);
+// stepping to another example hides it. That case is not tested here: it
+// needs store.setExample(word.id, n), which writes real localStorage in a
+// browser - not allowed in a test a learner might open. It is covered
+// instead in tests/unit/word.test.mjs, where Node has no real localStorage
+// for it to reach.
 
 const hasPlainBlock = face => /class="[^"]*\bplain\b[^"]*"/.test(face);
 

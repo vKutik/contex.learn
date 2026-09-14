@@ -30,19 +30,23 @@ export const blankOf = ex => ex.replace(MARKER, '<u> </u>');
 export const markedOf = (ex, text) =>
   ex.replace(MARKER, (_, m) => `<mark>${text ?? m}</mark>`);
 
+/* ---------- which example a word is showing ---------- */
+const exampleIndexOf = word => store.getExample(word.id) % word.examples.length;
+export const exampleOf = word => word.examples[exampleIndexOf(word)];
+const exampleNo = word => exampleIndexOf(word) + 1;
+const nextExample = word =>
+  store.setExample(word.id, (store.getExample(word.id) + 1) % word.examples.length);
+
 /* ---------- the plain-scene hint for abstract words ---------- */
 /** A quiet, wordless retelling of the card's first example - shown once,
  *  the very first time a word is met, so an abstract word (`cheerful`,
  *  `grief`) gets a picture the way a concrete one already has. Optional:
- *  most words have no `plain` field and this returns nothing for them. */
+ *  most words have no `plain` field and this returns nothing for them.
+ *  It only retells examples[0], so it is only shown while that is the
+ *  example on screen - "Show another example" steps past it and hides it,
+ *  same as stepping back to the first one brings it back. */
 const plainOf = (word, isNew) =>
-  (isNew && word.plain) ? `<div class="plain">${word.plain}</div>` : '';
-
-/* ---------- which example a word is showing ---------- */
-export const exampleOf = word => word.examples[store.getExample(word.id) % word.examples.length];
-const exampleNo = word => (store.getExample(word.id) % word.examples.length) + 1;
-const nextExample = word =>
-  store.setExample(word.id, (store.getExample(word.id) + 1) % word.examples.length);
+  (isNew && word.plain && exampleIndexOf(word) === 0) ? `<div class="plain">${word.plain}</div>` : '';
 
 /* ---------- the face ---------- */
 /**

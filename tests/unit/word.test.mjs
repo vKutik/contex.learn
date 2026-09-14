@@ -49,6 +49,22 @@ test('exampleOf follows the stored pointer and wraps round the shelf', async () 
   assert.equal(exampleOf(WORD), WORD.examples[0], 'the pointer wraps, it does not fall off');
 });
 
+test('the plain hint only shows while example 1 is the one on screen', async () => {
+  // plain retells examples[0] specifically - if "Show another example" has
+  // moved the card past it, the text below no longer matches that scene, so
+  // the hint must hide rather than sit above a sentence it was not written
+  // for. Stepping back to example 1 brings it back.
+  const wordWithPlain = { ...WORD, id: 901, plain: 'A simple retelling of example one.' };
+  assert.match(wordFace(wordWithPlain, null, true), /class="plain"/,
+    'plain shows on the first example, the one it was written for');
+  await store.setExample(wordWithPlain.id, 1);
+  assert.doesNotMatch(wordFace(wordWithPlain, null, true), /class="plain"/,
+    'stepping to another example no longer matches the plain scene, so it hides');
+  await store.setExample(wordWithPlain.id, 0);
+  assert.match(wordFace(wordWithPlain, null, true), /class="plain"/,
+    'stepping back to the first example brings the plain scene back');
+});
+
 test('the card face carries everything the card promises', () => {
   const html = wordFace(WORD);
   assert.match(html, /shallow/);
