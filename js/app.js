@@ -273,11 +273,16 @@ routes.reading = ({ id = null, word: only = null, after = null, ahead = false } 
   const late  = srs.overdueBy(passage.w);
   const total = shelfOf(passage.w).length;
   const done  = textsRead(passage.w);
+  // not among today's due words - either the queue is spent, or the learner
+  // asked to read ahead of it - so say so in the same words readingRested()
+  // already uses, rather than let this look like a due word
+  const extra = !due.includes(passage.w);
   screen().innerHTML = pageHead('Reading practice') + `
     <p class="muted"><b>${word.word}</b> · ${done >= total
         ? `all ${total} texts answered`
         : `${done} of ${total} answered`}${late > 1 ? ` · ${late} days overdue` : ''}
-      ${due.length > 1 ? ` · ${due.length - 1} more waiting` : ''}</p>
+      ${due.length > 1 ? ` · ${due.length - 1} more waiting` : ''}
+      ${extra ? ` · extra practice, it never moves a due date` : ''}</p>
     <div class="card" id="stage"></div>
     <button class="go" id="quiz">Answer the question</button>
     <button class="go ghost" id="more">Another text for <b>${word.word}</b></button>
@@ -323,6 +328,11 @@ const textsRead = wordId => shelfOf(wordId).filter(p => store.isPassageRead(p.id
    sitting and is forgotten, which is what keeps the shelf from repeating
    itself while you work through it. */
 const shown = new Set();
+/* Words whose reading check was answered in this sitting. Same rationale as
+   `shown`: module-level, NOT persisted, it orders one sitting and is
+   forgotten - which is what keeps "Another word" from handing back a word
+   the learner just answered. */
+const checked = new Set();
 /** One of the word's ten: an unread one it has not just served, at random. */
 function pickText(wordId){
   if(wordId == null) return null;
@@ -337,19 +347,32 @@ function pickText(wordId){
   shown.add(chosen.id);
   return chosen;
 }
+/** Prefer entries not already checked this sitting; if every one of them
+ *  is, there is nothing fresher to offer, so fall back to the list as given
+ *  rather than come back empty. */
+const preferUnchecked = ids => {
+  const fresh = ids.filter(id => !checked.has(id));
+  return fresh.length ? fresh : ids;
+};
 /** Which word to read next: the most overdue one, or - when the learner
  *  asked to move on - the one after it in the queue, so "Another word"
- *  walks the whole queue instead of bouncing between its top two. */
+ *  walks the whole queue instead of bouncing between its top two. Among
+ *  equally due candidates, one not yet checked this sitting wins. */
 function nextWord(due, after){
   if(!due.length) return anyIntroduced(after);
-  if(after === null) return due[0];
-  return due[(due.indexOf(after) + 1) % due.length];
+  const pool = preferUnchecked(due);
+  return pool[(pool.indexOf(after) + 1) % pool.length];
 }
-/** Reading ahead of schedule: whichever word is closest to its turn. */
+/** Reading ahead of schedule: whichever word is closest to its turn, and not
+ *  one already checked this sitting when another is available. With only
+ *  one word ever introduced, `skip` is all there is, so it is served again
+ *  rather than stalling. */
 function anyIntroduced(skip = null){
-  const ids = [...srs.introducedIds()].filter(id => id !== skip);
-  if(!ids.length) return null;
-  return ids.sort((a,b) => srs.overdueBy(b) - srs.overdueBy(a))[0];
+  const all = [...srs.introducedIds()];
+  if(!all.length) return null;
+  const notSkipped = all.filter(id => id !== skip);
+  const pool = preferUnchecked(notSkipped.length ? notSkipped : all);
+  return pool.sort((a,b) => srs.overdueBy(b) - srs.overdueBy(a))[0];
 }
 routes.readingQuiz = ({ id }) => {
   const passage = passages[id];
@@ -370,6 +393,7 @@ routes.readingQuiz = ({ id }) => {
       await store.markPassageRead(passage.id);
       // right: the next text for this word moves further out. wrong: tomorrow.
       await srs.gradeReading(passage.w, score === total);
+      checked.add(passage.w);
       scoreScreen(score, total,
         score === total
           ? 'You read the meaning out of the sentences around it. That is how words are actually learned.'

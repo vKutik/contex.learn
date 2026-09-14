@@ -163,6 +163,59 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
     assert.equal(settled, 'lvl3', 'a word already known does not need finding');
   });
 
+  /* CLAUDE.md rule 12: extra practice never moves a due date - but "Another
+   * word" also must not hand back a word this sitting has already checked.
+   * Three words are due; two more are introduced but not due yet, so once
+   * the due queue is spent there is somewhere fresh left to go. */
+  const withSpare = () => {
+    const state = progress({ ids:[0,1,2], reading: daysAgo(1) });
+    const spare = progress({ ids:[3,4], reading: dateIn(3) });
+    Object.assign(state.words, spare.words);
+    Object.assign(state.rsched, spare.rsched);
+    return state;
+  };
+  const checkOneAndMoveOn = async page => {
+    await page.click('#quiz');
+    await page.waitForSelector('[data-k]');
+    await answer(page, 0);
+    await page.waitForSelector('.pagehead h1');
+    await page.click('#another');
+    await page.waitForSelector('.story');
+  };
+
+  test('"Next word" never returns to a word already checked in this sitting', async () => {
+    const page = await startReading(withSpare());
+    const seen = [];
+    for(let i = 0; i < 3; i++){
+      seen.push((await page.textContent('.muted')).split('·')[0].trim());
+      await checkOneAndMoveOn(page);
+    }
+    assert.equal(new Set(seen).size, 3, `the three due words were not distinct: ${seen.join(' -> ')}`);
+
+    // the due queue is now empty - the word shown next must be one of the two
+    // still-unchecked words, never one already answered a moment ago
+    const fourth = (await page.textContent('.muted')).split('·')[0].trim();
+    assert.ok(!seen.includes(fourth),
+      `the fourth word repeated "${fourth}", already checked this sitting`);
+    await page.close_();
+  });
+
+  test('once the due queue is spent, the screen says this is extra practice', async () => {
+    const page = await startReading(withSpare());
+    for(let i = 0; i < 3; i++) await checkOneAndMoveOn(page);
+    assert.match(await page.textContent('.muted'), /extra practice/i);
+    assert.match(await page.textContent('.muted'), /never moves a due date/i);
+    await page.close_();
+  });
+
+  test('a word with nothing else left is still served, never a dead end', async () => {
+    const page = await startReading(progress({ ids:[0], reading: daysAgo(1) }));
+    await checkOneAndMoveOn(page);
+    // must land back on a story, not bounce to home for lack of a candidate
+    assert.match(await page.textContent('.story'), /\S/);
+    await page.close_();
+  });
+
   test('reading is offered only once a word has been opened', async () => {
     const page = await app.page();
     assert.equal(await page.$eval('#reading', b => b.disabled), true);
