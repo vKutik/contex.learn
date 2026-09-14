@@ -2,7 +2,7 @@
  * snapshot and writes back through storage.js, so the same logic can move to
  * a Python service untouched.
  */
-import { DAILY_NEW_LIMIT } from './data.js';
+import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET } from './data.js';
 import * as store from './storage.js';
 
 /** Review intervals in days. The spacing is the part that does the work. */
@@ -48,20 +48,51 @@ export function due(){
     .map(Number);
 }
 
+/* ---------- the daily budget on total work ---------- */
+
+/** Every answer logged today - card reviews, lesson quiz questions and
+ *  reading checks alike. The budget measures work done, not cards alone. */
+export const doneToday = () => {
+  const log = store.todayLog();
+  return log.right + log.wrong;
+};
+
+export const budgetLeft = () => Math.max(0, DAILY_BUDGET - doneToday());
+
+/** due(), most overdue first; ties broken by the lower box - the word with
+ *  more riding on it comes first when two are equally late. */
+export function dueSorted(){
+  const t = today();
+  return due().sort((a, b) => {
+    const overdue = daysBetween(store.getWord(b).next, t) - daysBetween(store.getWord(a).next, t);
+    return overdue || store.getWord(a).box - store.getWord(b).box;
+  });
+}
+
+/** What today's budget actually has room for. Extra practice never moves a
+ *  due date - a word cut here is still in due() tomorrow, at the front. */
+export const reviewQueue = () => dueSorted().slice(0, budgetLeft());
+
 /* ---------- the daily cap on new words ---------- */
 const startTimes = () => {
   const now = Date.now();
   return Object.keys(store.snapshot().words)
     .map(id => store.getWord(id).new)
-    .filter(t => t && now - t < DAY)
+    .filter(t => t && now - t < NEW_WINDOW_MS)
     .sort((a,b) => a-b);
 };
 
 /** The cap as it stands this minute: five, plus any batch asked for inside
- *  the last 24 hours. Both halves age out of the same rolling window. */
-const capNow = () => DAILY_NEW_LIMIT + store.grantsSince(Date.now() - DAY) * DAILY_NEW_LIMIT;
+ *  the last 12 hours. Both halves age out of the same rolling window. */
+const capNow = () => DAILY_NEW_LIMIT + store.grantsSince(Date.now() - NEW_WINDOW_MS) * DAILY_NEW_LIMIT;
 
-export const newQuota = () => Math.max(0, capNow() - startTimes().length);
+/** The window brake and the budget brake, whichever bites first: opening a
+ *  word this cap allows still has to fit inside what today has room for. */
+export const newQuota = () => {
+  const byWindow = capNow() - startTimes().length;
+  const bySpace  = budgetLeft() - due().length;
+  return Math.max(0, Math.min(byWindow, bySpace));
+};
 
 /** Open one more batch of five right now, without moving the cap itself. */
 export const grantMore = () => store.grantNewWords();
@@ -70,7 +101,7 @@ export const grantMore = () => store.grantNewWords();
 export function unlockIn(){
   const r = startTimes(), cap = capNow();
   if(r.length < cap) return 0;
-  return Math.max(0, r[r.length - cap] + DAY - Date.now());
+  return Math.max(0, r[r.length - cap] + NEW_WINDOW_MS - Date.now());
 }
 
 export function hhmm(ms){

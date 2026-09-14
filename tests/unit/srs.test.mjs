@@ -12,6 +12,7 @@ import * as store from '../../js/storage.js';
 import * as srs from '../../js/srs.js';
 import { fresh, seedWord, seedDue, today, dateIn, daysAgo, hoursAgo,
          withClock, DAY_MS } from '../helpers/fixture.mjs';
+import { DAILY_BUDGET } from '../../js/data.js';
 
 beforeEach(fresh);
 
@@ -78,23 +79,72 @@ test('due() returns words at or past their date and nothing else', async () => {
   assert.deepEqual(srs.due().sort((a,b)=>a-b), [1,2]);
 });
 
+/* ---------- the daily budget ---------- */
+
+test('with nothing answered yet, budgetLeft is the whole daily budget', () => {
+  assert.equal(srs.doneToday(), 0);
+  assert.equal(srs.budgetLeft(), DAILY_BUDGET);
+});
+
+test('doneToday counts every answer logged today, right and wrong alike', async () => {
+  await store.logAnswer(true);
+  await store.logAnswer(true);
+  await store.logAnswer(false);
+  assert.equal(srs.doneToday(), 3);
+  assert.equal(srs.budgetLeft(), DAILY_BUDGET - 3);
+});
+
+test('budgetLeft never goes below zero', async () => {
+  for(let n = 0; n < DAILY_BUDGET + 5; n++) await store.logAnswer(true);
+  assert.equal(srs.budgetLeft(), 0);
+});
+
+test('dueSorted puts a 9-days-overdue word ahead of a due-today one', async () => {
+  await seedWord(0, { next: today(), box: 0 });
+  await seedWord(1, { next: daysAgo(9), box: 0 });
+  assert.deepEqual(srs.dueSorted(), [1, 0]);
+});
+
+test('dueSorted breaks ties by the lower box first', async () => {
+  await seedWord(0, { next: daysAgo(2), box: 3 });
+  await seedWord(1, { next: daysAgo(2), box: 1 });
+  assert.deepEqual(srs.dueSorted(), [1, 0]);
+});
+
+test('reviewQueue is cut to the budget when more is due than fits', async () => {
+  for(let id = 0; id < 5; id++) await seedWord(id, { next: daysAgo(1), box: 0 });
+  for(let n = 0; n < DAILY_BUDGET - 2; n++) await store.logAnswer(true);   // 2 left
+  assert.equal(srs.budgetLeft(), 2);
+  assert.equal(srs.dueSorted().length, 5);
+  assert.deepEqual(srs.reviewQueue(), srs.dueSorted().slice(0, 2));
+  assert.equal(srs.reviewQueue().length, 2);
+});
+
+test('a word cut from today\'s queue is still due tomorrow', async () => {
+  await seedWord(0, { next: daysAgo(1), box: 0 });
+  await seedWord(1, { next: daysAgo(1), box: 0 });
+  for(let n = 0; n < DAILY_BUDGET - 1; n++) await store.logAnswer(true);   // 1 left
+  assert.equal(srs.reviewQueue().length, 1);
+  assert.equal(srs.due().length, 2, 'the cut word is still due, budget or not');
+});
+
 /* ---------- the daily cap on new words ---------- */
 
-test('the cap is five per rolling 24 hours', async () => {
+test('the cap is five per rolling twelve hours', async () => {
   assert.equal(srs.newQuota(), 5);
   for(let id = 0; id < 5; id++) await srs.introduce(id);
   assert.equal(srs.newQuota(), 0);
   assert.ok(srs.unlockIn() > 0, 'with the cap full there must be a wait');
 });
 
-test('a word opened more than a day ago no longer counts against the cap', async () => {
-  for(let id = 0; id < 5; id++) await seedWord(id, { new: hoursAgo(25) });
+test('a word opened more than twelve hours ago no longer counts against the cap', async () => {
+  for(let id = 0; id < 5; id++) await seedWord(id, { new: hoursAgo(13) });
   assert.equal(srs.newQuota(), 5);
   assert.equal(srs.unlockIn(), 0);
 });
 
-test('unlockIn counts down to the oldest of the five, not to a flat 24 hours', async () => {
-  for(let id = 0; id < 5; id++) await seedWord(id, { new: hoursAgo(23) });
+test('unlockIn counts down to the oldest of the five, not to a flat 12 hours', async () => {
+  for(let id = 0; id < 5; id++) await seedWord(id, { new: hoursAgo(11) });
   const hours = srs.unlockIn() / 36e5;
   assert.ok(hours > 0.5 && hours < 1.5, `expected about an hour, got ${hours}`);
 });
@@ -107,10 +157,37 @@ test('+5 opens one more batch and does not raise the cap itself', async () => {
   assert.equal(srs.unlockIn(), 0);
 });
 
-test('a grant ages out of the same rolling 24 hours, so tomorrow starts at five', async () => {
-  await withClock(-25 * 36e5, () => srs.grantMore());     // asked for yesterday
+test('a grant ages out of the same rolling window an opened word does', async () => {
+  await withClock(-13 * 36e5, () => srs.grantMore());     // asked for 13 hours ago
   for(let id = 0; id < 5; id++) await srs.introduce(id);
-  assert.equal(srs.newQuota(), 0, 'yesterday\'s grant must not still be open');
+  assert.equal(srs.newQuota(), 0, 'a grant from 13 hours ago must not still be open');
+});
+
+test('a grant made inside the last 12 hours still opens a batch', async () => {
+  await withClock(-11 * 36e5, () => srs.grantMore());     // asked for 11 hours ago
+  for(let id = 0; id < 5; id++) await srs.introduce(id);
+  assert.equal(srs.newQuota(), 5, 'an 11-hour-old grant is still inside the window');
+});
+
+/* ---------- the backlog brake on new words ---------- */
+
+test('with no backlog, newQuota behaves as before: five, then zero', async () => {
+  assert.equal(srs.newQuota(), 5);
+  for(let id = 0; id < 5; id++) await srs.introduce(id);
+  assert.equal(srs.newQuota(), 0);
+});
+
+test('a backlog bigger than the budget blocks new words even with an empty window', async () => {
+  for(let n = 0; n < DAILY_BUDGET - 2; n++) await store.logAnswer(true);   // budgetLeft = 2
+  for(let id = 0; id < 3; id++) await seedWord(id, { next: daysAgo(1) });  // 3 due
+  assert.equal(srs.newQuota(), 0, 'the window is empty but there is no room left for new words');
+});
+
+test('grantMore does not get past the backlog brake - it only lifts byWindow', async () => {
+  for(let n = 0; n < DAILY_BUDGET - 2; n++) await store.logAnswer(true);   // budgetLeft = 2
+  for(let id = 0; id < 3; id++) await seedWord(id, { next: daysAgo(1) });  // 3 due
+  await srs.grantMore();
+  assert.equal(srs.newQuota(), 0, 'the grant raises the window cap, not the space the budget has left');
 });
 
 test('hhmm reads as a wait, not as milliseconds', () => {

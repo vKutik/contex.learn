@@ -12,7 +12,9 @@ import { passages } from './data/passages.js';
 
 export { words, lessons, passages };
 
-export const DAILY_NEW_LIMIT = 5;   // new words per rolling 24h
+export const DAILY_NEW_LIMIT = 5;   // words per batch
+export const NEW_WINDOW_MS = 12 * 36e5;  // one batch per 12 hours
+export const DAILY_BUDGET  = 80;         // max answers in a day
 
 /** One word by id. */
 export const wordById = id => words[id];

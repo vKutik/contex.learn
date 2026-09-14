@@ -3,7 +3,7 @@
  * anything themselves (storage.js) and never schedule anything (srs.js).
  */
 import { words, lessons, passages, wordById, lessonWords, openPassages,
-         shelfOf } from './data.js';
+         shelfOf, DAILY_BUDGET } from './data.js';
 import * as store from './storage.js';
 import * as srs from './srs.js';
 import * as settings from './settings.js';
@@ -58,7 +58,9 @@ function scoreScreen(score, total, note, buttons){
 }
 /* ---------------- home ---------------- */
 routes.home = () => {
-  const dueIds   = srs.due();
+  const dueAll   = srs.dueSorted();
+  const queue    = srs.reviewQueue();
+  const carriedOver = dueAll.length - queue.length;
   const wait     = srs.unlockIn();
   const openIds  = srs.introducedIds();
   const reading  = openPassages(openIds);
@@ -72,22 +74,23 @@ routes.home = () => {
   };
   /* Exactly one filled button, and it is the first thing that can actually
      be done. Nailing "primary" to a fixed button is how a *disabled*
-     "New words in 24h" ended up the loudest element on the screen while the
+     "New words in 12h" ended up the loudest element on the screen while the
      one thing you could press sat in an outline. */
   const actions = [
-    dueIds.length && { id:'review', label:`Review ${dueIds.length} word${dueIds.length===1?'':'s'}` },
-    { id:'lesson',  label: lesson ? 'Learn'
-        : wait ? `New words in ${srs.hhmm(wait)}` : 'All words opened', off: !lesson },
+    queue.length && { id:'review', label:`Review ${queue.length} word${queue.length===1?'':'s'}` },
+    { id:'lesson',  label: lessonLabel(lesson, wait), off: !lesson },
     { id:'reading', label:'Reading practice', off: !reading.length },
     { id:'list',    label:'Word list' }
   ].filter(Boolean);
   const lead = actions.find(a => !a.off);
   screen().innerHTML = progressRing(counts) +
+    `<p class="muted budget">${srs.doneToday()} of ${DAILY_BUDGET} today</p>` +
+    (carriedOver > 0 ? `<p class="muted">${carriedOver} more due — waiting for tomorrow's budget.</p>` : '') +
     actions.map(a => `<button class="go${a === lead ? '' : ' ghost'}" id="${a.id}"${
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +
     `<button class="linkbtn" id="settings">Settings</button>`;
   const on = (id, fn) => { const el = screen().querySelector('#'+id); if(el) el.onclick = fn; };
-  on('review',   () => go('review',  { queue: shuffle(dueIds), i:0, revealed:false }));
+  on('review',   () => go('review',  { queue: shuffle(queue), i:0, revealed:false }));
   on('lesson',   () => lesson && go('lesson', { id: lesson.id, stage: resumeStage(lesson) }));
   on('reading',  () => go('reading'));
   on('list',     () => go('list'));
@@ -102,6 +105,16 @@ function nextLesson(){
   if(unfinished) return unfinished;
   if(srs.newQuota() === 0) return null;
   return lessons.find(l => l.wordIds.some(id => !store.getWord(id))) || null;
+}
+/** The Learn button's label when there is nothing to resume: a countdown
+ *  when the 12h window is what's holding it back, a plain reason when the
+ *  review backlog is what's holding it back instead, or the finish line
+ *  when there is truly nothing left to open. */
+function lessonLabel(lesson, wait){
+  if(lesson) return 'Learn';
+  const hasMore = lessons.some(l => l.wordIds.some(id => !store.getWord(id)));
+  if(!hasMore) return 'All words opened';
+  return wait ? `New words in ${srs.hhmm(wait)}` : 'Reviews come first';
 }
 /** Which of the three stages to drop back into. */
 function resumeStage(lesson){
@@ -425,21 +438,24 @@ routes.settings = ({ confirming = false, note = '' } = {}) => {
   if(no) no.onclick = () => go('settings');
   wireBack();
 };
-/* Five a day is not a limit imposed on the learner - it is the number the
+/* Five a batch is not a limit imposed on the learner - it is the number the
    review intervals assume, and going faster than it is what buries people in
    reviews a week later. So the button opens one more batch rather than
-   raising the cap: the extra ages out on its own and tomorrow starts at five
-   again, with no setting left switched on to forget about. */
+   raising the cap: the extra ages out on its own and the next window starts
+   at five again, with no setting left switched on to forget about. */
 function newWordsCard(){
   const quota = srs.newQuota();
   const wait  = srs.unlockIn();
   return `<div class="card">
     <h2>New words</h2>
-    <p class="muted">Five new words per 24 hours is the pace the spacing is
-      built around. This opens five more right now without changing that —
-      the extra batch ages out after a day, and tomorrow starts at five again.</p>
+    <p class="muted">Five new words per 12 hours is the pace the spacing is
+      built around, and it stops handing out new words when the review
+      backlog would not fit in a day. This opens five more right now without
+      changing either of those — the extra batch ages out after 12 hours,
+      and the window starts at five again.</p>
     <div class="row"><span>Ready to open now</span><b>${quota}</b></div>
     ${!quota && wait ? `<div class="row"><span>Next five in</span><b>${srs.hhmm(wait)}</b></div>` : ''}
+    ${!quota && !wait ? `<div class="row"><span>Reviews first — budget left</span><b>${srs.budgetLeft()}</b></div>` : ''}
     <button class="go ghost" id="plus5">+5 words now</button>
   </div>`;
 }

@@ -1,8 +1,9 @@
 # Words learning app
 
-A vocabulary trainer for 100 words: five new words a day, a story that uses
-all five, and a quiz built from that story. Spaced repetition brings each
-word back on its own schedule.
+A vocabulary trainer for 100 words: five new words every 12 hours, a story
+that uses all five, and a quiz built from that story. Spaced repetition
+brings each word back on its own schedule, and new words stop being handed
+out once the review backlog is bigger than a day can hold.
 
 ## Running it
 
@@ -78,7 +79,7 @@ js/
 
 - **One filled button per screen, and it is the one you can press.** Primary
   is assigned to the first *actionable* thing, not nailed to a fixed button —
-  which is how a disabled "New words in 24h 0m" once ended up the loudest
+  which is how a disabled "New words in 12h 0m" once ended up the loudest
   element on the home screen while the only pressable action sat in an
   outline. Everything else is an outline without the green border, so green
   means "this one".
@@ -112,11 +113,14 @@ js/
 
 ## Learning flow
 
-1. **Daily limit** — 5 new words per rolling 24 hours, with a **+5 words now**
+1. **Daily limit** — 5 new words per rolling 12 hours, with a **+5 words now**
    button in Settings for the days you want to go faster. It opens one more
    batch rather than raising the cap: the grant is a timestamp that ages out
-   of the same rolling 24 hours an opened word does, so tomorrow starts at
-   five again with no setting left switched on to forget about.
+   of the same rolling 12 hours an opened word does, so the window starts at
+   five again with no setting left switched on to forget about. New words
+   also stop when today's review backlog would not fit inside the daily
+   answer budget — the schedule is never allowed to bury a learner in
+   reviews it handed out itself.
 2. **Stage 1, flashcards** — word, transcription, recording, definition, one
    example. Five cards.
 3. **Stage 2, recall** — five gap fills, one per word, before the story.

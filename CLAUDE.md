@@ -15,8 +15,10 @@ judged against that.
 
 ## What the app does today
 
-**Learning flow.** Five new words per rolling 24 hours, delivered as a
-lesson in four stages:
+**Learning flow.** Five new words per rolling 12 hours, delivered as a
+lesson in four stages. New words stop being handed out once the review
+backlog is bigger than what fits inside the daily answer budget — the
+schedule never buries a learner in the reviews it handed out itself.
 
 1. **Cards** — word, IPA, a human recording, definition, one example,
    an antonym, and a familiarity indicator. Five cards.
@@ -184,7 +186,7 @@ grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
     comes back by itself; it does not decide what the learner is allowed to
     read. Keep those separate.
 13. **The daily cap is not raised permanently.** `+5 words` grants one
-    extra batch that ages out of the same rolling 24 hours.
+    extra batch that ages out of the same rolling 12 hours.
 14. **Reading only recolours a word.** It never changes its review due
     date — that is the review screen's job alone.
 15. **Signalling steps back.** `<mark>` fades across the four familiarity
