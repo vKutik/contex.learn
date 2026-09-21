@@ -37,9 +37,16 @@ resetting to the first rung on a miss). Separately from the schedule, the
 learner can always read more: *Another text for `<word>`* walks that word's
 shelf without touching its due date, and *Another word* walks the due queue.
 
-**Review.** Classic spaced repetition on the cards: recall prompt, reveal,
-then one of four grades (Forgot / Hard / Good / Easy) which sets the next
-due date from `STEPS`.
+**Review.** Spaced repetition on the cards, in small sittings rather than
+one long queue: recall prompt, reveal, then one of four grades (Forgot /
+Hard / Good / Easy) which sets the next due date from `STEPS`. A sitting is
+at most `SESSION_SIZE` cards, and at most `DAILY_REVIEW_LIMIT` are graded in
+a day - the rest stay due and roll over to tomorrow, most overdue first.
+Neither number ever shows on the review screen itself; the pill above the
+card counts the sitting ("3 of 5"), not the day's backlog. A card graded
+Forgot gets one softer turn at the end of the same sitting and then keeps
+whatever due date the real grading set - it is never asked a third time
+that day.
 
 **Three generated quiz mechanics**, all built from the word list at run time
 so they never go stale:
@@ -84,6 +91,7 @@ js/
   data.js                  the data contract (re-exports + helpers)
   storage.js               the ONLY module that persists progress
   srs.js                   scheduling rules, no DOM
+  session.js               turns the day's due queue into review sittings, no DOM
   settings.js              app preferences, the developer unlock
   util.js                  shuffle, one
   fresh.js                 reloads a tab running a replaced build
@@ -138,6 +146,7 @@ read   { [passageId]: 1 }
 lesson { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
 rsched { [wordId]: { step, next } }   when this word is next due a text
 log    { 'YYYY-MM-DD': { right, wrong } }
+reviews { 'YYYY-MM-DD': count }  card reviews graded that day, for the daily review cap
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 ```
 
