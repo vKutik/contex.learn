@@ -20,7 +20,7 @@ test('under Node nothing is persisted anywhere - the suite cannot touch real pro
 
 test('a fresh store is empty in every compartment', () => {
   const s = store.snapshot();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']){
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','reviews']){
     assert.deepEqual(s[key], {}, `${key} should start empty`);
   }
   assert.deepEqual(s.grants, []);
@@ -28,7 +28,7 @@ test('a fresh store is empty in every compartment', () => {
 
 test('load() survives having no back end at all and still returns a usable shape', async () => {
   const s = await store.load();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']) assert.ok(s[key]);
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','reviews']) assert.ok(s[key]);
   assert.ok(Array.isArray(s.grants));
 });
 
@@ -76,6 +76,16 @@ test('the daily tally counts right and wrong under today\'s date', async () => {
   assert.deepEqual(Object.keys(store.snapshot().log), [key]);
 });
 
+test('reviewsToday counts only what logReview logs, separately from logAnswer', async () => {
+  assert.equal(store.reviewsToday(), 0);
+  await store.logAnswer(true);              // a lesson or reading answer - not a review
+  assert.equal(store.reviewsToday(), 0);
+  await store.logReview();
+  await store.logReview();
+  assert.equal(store.reviewsToday(), 2);
+  assert.deepEqual(store.todayLog(), { right:1, wrong:0 }, 'logReview does not touch the answer tally');
+});
+
 test('a grant is a timestamp, and grantsSince only counts the recent ones', async () => {
   await store.grantNewWords();
   assert.equal(store.grantsSince(Date.now() - DAY_MS), 1);
@@ -95,6 +105,7 @@ test('resetAll wipes every compartment', async () => {
   await store.setLessonStage(1, 'done');
   await store.setReadingPlan(1, { step:1, next:'2030-01-01' });
   await store.logAnswer(true);
+  await store.logReview();
   await store.grantNewWords();
 
   await store.resetAll();
@@ -106,6 +117,7 @@ test('resetAll wipes every compartment', async () => {
   assert.deepEqual(s.lesson, {});
   assert.deepEqual(s.rsched, {});
   assert.deepEqual(s.log, {});
+  assert.deepEqual(s.reviews, {});
   assert.deepEqual(s.grants, []);
 });
 

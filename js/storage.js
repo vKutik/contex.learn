@@ -12,11 +12,13 @@
  *   lesson: { [lessonId]: 'reading' | 'quiz' | 'done' }
  *   rsched: { [wordId]: { step, next } }  when this word is next due a text
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
+ *   reviews: { 'YYYY-MM-DD': count }  card reviews graded that day, for the
+ *            daily review cap - a subset of what `log` tallies as answers
  */
 const KEY = 'vocab-progress';
 
 const empty = () => ({ words:{}, ex:{}, rw:{}, read:{}, lesson:{}, rsched:{},
-                       log:{}, grants:[], streak:0, last:null });
+                       log:{}, grants:[], reviews:{}, streak:0, last:null });
 
 let state = empty();
 
@@ -54,7 +56,7 @@ const Backend = {
 export async function load(){
   const raw = await Backend.read();
   if(raw){ try { state = { ...empty(), ...JSON.parse(raw) }; } catch(e){} }
-  for(const k of ['words','ex','rw','read','lesson','rsched','log']) if(!state[k]) state[k] = {};
+  for(const k of ['words','ex','rw','read','lesson','rsched','log','reviews']) if(!state[k]) state[k] = {};
   // texts flagged by the removed "?" button: back on the shelf, and the key
   // written out of the save rather than left behind as inert cruft
   if(state.murky){ delete state.murky; await save(); }
@@ -108,6 +110,15 @@ export function logAnswer(right){
   return save();
 }
 export const todayLog = () => state.log[new Date().toISOString().slice(0,10)] || { right:0, wrong:0 };
+
+/** One card review graded today, for the daily review cap - kept apart from
+ *  `log` so a lesson or reading answer never eats into that budget. */
+export function logReview(){
+  const t = new Date().toISOString().slice(0,10);
+  state.reviews[t] = (state.reviews[t] || 0) + 1;
+  return save();
+}
+export const reviewsToday = () => state.reviews[new Date().toISOString().slice(0,10)] || 0;
 
 /** Wipe every word, lesson and log - a hard reset back to a fresh install.
  *  Developer-only tool (see js/settings.js); not reachable from normal UI. */
