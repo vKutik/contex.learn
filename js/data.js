@@ -15,6 +15,8 @@ export { words, lessons, passages };
 export const DAILY_NEW_LIMIT = 5;   // words per batch
 export const NEW_WINDOW_MS = 12 * 36e5;  // one batch per 12 hours
 export const DAILY_BUDGET  = 80;         // max answers in a day
+export const DAILY_REVIEW_LIMIT = 20;    // max card reviews in a day
+export const SESSION_SIZE = 5;           // cards in one review sitting
 
 /** One word by id. */
 export const wordById = id => words[id];

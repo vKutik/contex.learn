@@ -12,7 +12,7 @@ import * as store from '../../js/storage.js';
 import * as srs from '../../js/srs.js';
 import { fresh, seedWord, seedDue, today, dateIn, daysAgo, hoursAgo,
          withClock, DAY_MS } from '../helpers/fixture.mjs';
-import { DAILY_BUDGET } from '../../js/data.js';
+import { DAILY_BUDGET, DAILY_REVIEW_LIMIT } from '../../js/data.js';
 
 beforeEach(fresh);
 
@@ -128,6 +128,36 @@ test('a word cut from today\'s queue is still due tomorrow', async () => {
   assert.equal(srs.due().length, 2, 'the cut word is still due, budget or not');
 });
 
+/* ---------- the daily cap on reviews ---------- */
+
+test('38 due cards -> today\'s queue holds only the daily review limit', async () => {
+  for(let id = 0; id < 38; id++) await seedWord(id, { next: daysAgo(1), box: 0 });
+  assert.equal(srs.due().length, 38);
+  assert.equal(srs.reviewQueue().length, DAILY_REVIEW_LIMIT);
+});
+
+test('reviewQueue keeps the most overdue cards when the review cap bites', async () => {
+  for(let id = 0; id < DAILY_REVIEW_LIMIT + 3; id++)
+    await seedWord(id, { next: daysAgo(id + 1), box: 0 });   // id 0 least overdue, last id most
+  const queue = srs.reviewQueue();
+  assert.equal(queue.length, DAILY_REVIEW_LIMIT);
+  assert.deepEqual(queue, srs.dueSorted().slice(0, DAILY_REVIEW_LIMIT));
+});
+
+test('once the review cap is spent, no more reviews today but the rest stay due', async () => {
+  for(let id = 0; id < 25; id++) await seedWord(id, { next: daysAgo(1), box: 0 });
+  for(let n = 0; n < DAILY_REVIEW_LIMIT; n++) await srs.grade(n, 2);
+  assert.equal(srs.reviewsToday(), DAILY_REVIEW_LIMIT);
+  assert.equal(srs.reviewQueue().length, 0, 'the cap is spent for today');
+  assert.equal(srs.due().length, 5, 'the five cards graded moved on; the rest are still due, for tomorrow');
+});
+
+test('the review cap and the answer budget cap the same queue, whichever bites first', async () => {
+  for(let id = 0; id < 10; id++) await seedWord(id, { next: daysAgo(1), box: 0 });
+  for(let n = 0; n < DAILY_BUDGET - 3; n++) await store.logAnswer(true);   // 3 left
+  assert.equal(srs.reviewQueue().length, 3, 'the answer budget is tighter than the review cap here');
+});
+
 /* ---------- the daily cap on new words ---------- */
 
 test('the cap is five per rolling twelve hours', async () => {
@@ -236,6 +266,28 @@ test('the box never runs past the last interval', async () => {
 test('grading a word that was never opened does not throw', async () => {
   await srs.grade(42, 2);
   assert.equal(store.getWord(42).box, 1);
+});
+
+/* ---------- the relearn turn: a wrong card's second, softer try ---------- */
+
+test('a relearn grade does not move the box or the due date again', async () => {
+  await seedWord(0, { box:5 });
+  await srs.grade(0, 0);                       // the real, wrong grading
+  assert.equal(store.getWord(0).box, 0);
+  assert.equal(store.getWord(0).next, dateIn(1));
+
+  await srs.grade(0, 3, { relearn:true });     // the softer second try, whatever it scores
+  assert.equal(store.getWord(0).box, 0, 'still tomorrow, not skipped ahead by the relearn grade');
+  assert.equal(store.getWord(0).next, dateIn(1));
+});
+
+test('a relearn grade logs the answer but not another review', async () => {
+  await seedWord(0, { box:0 });
+  await srs.grade(0, 0);
+  assert.equal(srs.reviewsToday(), 1);
+  await srs.grade(0, 2, { relearn:true });
+  assert.equal(srs.reviewsToday(), 1, 'the relearn turn does not spend another slot of the cap');
+  assert.deepEqual(store.todayLog(), { right:1, wrong:1 }, 'both turns still show up in the day\'s tally');
 });
 
 /* ---------- the reading ladder ---------- */

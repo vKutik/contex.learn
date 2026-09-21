@@ -2,7 +2,7 @@
  * snapshot and writes back through storage.js, so the same logic can move to
  * a Python service untouched.
  */
-import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET } from './data.js';
+import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET, DAILY_REVIEW_LIMIT } from './data.js';
 import * as store from './storage.js';
 
 /** Review intervals in days. The spacing is the part that does the work. */
@@ -59,6 +59,12 @@ export const doneToday = () => {
 
 export const budgetLeft = () => Math.max(0, DAILY_BUDGET - doneToday());
 
+/** Reviews graded today, and what the daily review cap still has room for -
+ *  a big backlog is capped here rather than handed out all at once, so the
+ *  rest waits for tomorrow instead of making the app feel unfinishable. */
+export const reviewsToday = () => store.reviewsToday();
+export const reviewQuotaLeft = () => Math.max(0, DAILY_REVIEW_LIMIT - reviewsToday());
+
 /** due(), most overdue first; ties broken by the lower box - the word with
  *  more riding on it comes first when two are equally late. */
 export function dueSorted(){
@@ -69,9 +75,11 @@ export function dueSorted(){
   });
 }
 
-/** What today's budget actually has room for. Extra practice never moves a
- *  due date - a word cut here is still in due() tomorrow, at the front. */
-export const reviewQueue = () => dueSorted().slice(0, budgetLeft());
+/** What today actually has room for: the answer budget and the daily review
+ *  cap, whichever is tighter. Extra practice never moves a due date - a word
+ *  cut here is still in due() tomorrow, at the front, since nothing here
+ *  touches it. */
+export const reviewQueue = () => dueSorted().slice(0, Math.min(budgetLeft(), reviewQuotaLeft()));
 
 /* ---------- the daily cap on new words ---------- */
 const startTimes = () => {
@@ -121,15 +129,24 @@ export function introduce(id){
   return store.putWord(id, s);
 }
 
-/** grade: 0 forgot, 1 hard, 2 good, 3 easy. */
-export function grade(id, g){
+/** grade: 0 forgot, 1 hard, 2 good, 3 easy.
+ *
+ * `relearn`: this is a word's second turn in the same sitting, given once
+ * after it was missed (see js/session.js). Its due date was already fixed
+ * at tomorrow by the first, real grading, so this turn only logs the
+ * answer - it does not move the box or the date again, and it does not
+ * spend another slot of the daily review cap. */
+export function grade(id, g, { relearn = false } = {}){
+  store.logAnswer(g > 0);
+  if(relearn) return store.getWord(id);
+
   const s = store.getWord(id) || { box:0, right:0, wrong:0, seen:0 };
   s.seen++;
   if(g === 0){ s.wrong++; s.box = 0; }                 // forgot: back to day one
   else { s.right++; s.box = Math.min(STEPS.length-1, s.box + (g === 1 ? 0 : g === 2 ? 1 : 2)); }
   s.next = addDays(STEPS[s.box]);
   s.lastSeen = today();
-  store.logAnswer(g > 0);
+  store.logReview();
   return store.putWord(id, s);
 }
 
