@@ -147,7 +147,7 @@ test('reviewQueue keeps the most overdue cards when the review cap bites', async
 test('once the review cap is spent, no more reviews today but the rest stay due', async () => {
   for(let id = 0; id < 25; id++) await seedWord(id, { next: daysAgo(1), box: 0 });
   for(let n = 0; n < DAILY_REVIEW_LIMIT; n++) await srs.grade(n, 2);
-  assert.equal(srs.reviewsToday(), DAILY_REVIEW_LIMIT);
+  assert.equal(store.reviewsToday(), DAILY_REVIEW_LIMIT);
   assert.equal(srs.reviewQueue().length, 0, 'the cap is spent for today');
   assert.equal(srs.due().length, 5, 'the five cards graded moved on; the rest are still due, for tomorrow');
 });
@@ -284,9 +284,9 @@ test('a relearn grade does not move the box or the due date again', async () => 
 test('a relearn grade logs the answer but not another review', async () => {
   await seedWord(0, { box:0 });
   await srs.grade(0, 0);
-  assert.equal(srs.reviewsToday(), 1);
+  assert.equal(store.reviewsToday(), 1);
   await srs.grade(0, 2, { relearn:true });
-  assert.equal(srs.reviewsToday(), 1, 'the relearn turn does not spend another slot of the cap');
+  assert.equal(store.reviewsToday(), 1, 'the relearn turn does not spend another slot of the cap');
   assert.deepEqual(store.todayLog(), { right:1, wrong:1 }, 'both turns still show up in the day\'s tally');
 });
 

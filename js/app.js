@@ -7,6 +7,7 @@ import { words, lessons, passages, wordById, lessonWords, openPassages,
 import * as store from './storage.js';
 import * as srs from './srs.js';
 import * as settings from './settings.js';
+import { startSession, afterAnswer, sessionLabel } from './session.js';
 import { progressRing, familiarityDots } from './components/progress.js';
 import { renderFlashcard } from './components/flashcard.js';
 import { say } from './components/audio.js';
@@ -59,8 +60,9 @@ function scoreScreen(score, total, note, buttons){
 /* ---------------- home ---------------- */
 routes.home = () => {
   const dueAll   = srs.dueSorted();
-  const queue    = srs.reviewQueue();
-  const carriedOver = dueAll.length - queue.length;
+  const dayQueue = srs.reviewQueue();
+  const sitting  = startSession(dayQueue);
+  const carriedOver = dueAll.length - dayQueue.length;
   const wait     = srs.unlockIn();
   const openIds  = srs.introducedIds();
   const reading  = openPassages(openIds);
@@ -75,9 +77,11 @@ routes.home = () => {
   /* Exactly one filled button, and it is the first thing that can actually
      be done. Nailing "primary" to a fixed button is how a *disabled*
      "New words in 12h" ended up the loudest element on the screen while the
-     one thing you could press sat in an outline. */
+     one thing you could press sat in an outline.
+     The button counts this sitting, never the day's backlog - "Review 5
+     words" stays true and finishable how ever large the queue behind it. */
   const actions = [
-    queue.length && { id:'review', label:`Review ${queue.length} word${queue.length===1?'':'s'}` },
+    sitting.length && { id:'review', label:`Review ${sitting.length} word${sitting.length===1?'':'s'}` },
     { id:'lesson',  label: lessonLabel(lesson, wait), off: !lesson },
     { id:'reading', label:'Reading practice', off: !reading.length },
     { id:'list',    label:'Word list' }
@@ -90,7 +94,7 @@ routes.home = () => {
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +
     `<button class="linkbtn" id="settings">Settings</button>`;
   const on = (id, fn) => { const el = screen().querySelector('#'+id); if(el) el.onclick = fn; };
-  on('review',   () => go('review',  { queue: shuffle(queue), i:0, revealed:false }));
+  on('review',   () => go('review',  { queue: shuffle(sitting), i:0, revealed:false }));
   on('lesson',   () => lesson && go('lesson', { id: lesson.id, stage: resumeStage(lesson) }));
   on('reading',  () => go('reading'));
   on('list',     () => go('list'));
@@ -217,31 +221,44 @@ function lessonQuiz(lesson, ws){
     }
   });
 }
-/* ---------------- review ---------------- */
+/* ---------------- review ----------------
+   A sitting is small on purpose: SESSION_SIZE cards, never the whole day's
+   backlog - see js/session.js. A card missed on its first turn gets one
+   more, softer try at the end of this same sitting; after that its due date
+   stands at whatever the real grading already set (tomorrow) and it is not
+   asked again today. The pill above the card counts this sitting only - the
+   day's full due count never has to appear here. */
 routes.review = params => {
   const { queue, i, revealed } = params;
   if(i >= queue.length){
     const log = store.todayLog();
-    screen().innerHTML = pageHead('Session done') + `
+    const reviewed = queue.filter(e => !e.relearn).length;
+    const more = startSession(srs.reviewQueue());
+    screen().innerHTML = pageHead('Done ✓') + `
       <div class="card">
-        <div class="row"><span>Reviewed</span><b>${queue.length}</b></div>
+        <div class="row"><span>Reviewed</span><b>${reviewed}</b></div>
         <div class="row"><span>Right today</span><b>${log.right}</b></div>
         <div class="row"><span>Forgotten today</span><b>${log.wrong}</b></div>
-      </div>${backButton('Back','home')}`;
+      </div>
+      ${more.length ? `<button class="go" id="more">${more.length} more</button>` : ''}
+      ${backButton('Back', 'home')}`;
+    const moreBtn = screen().querySelector('#more');
+    if(moreBtn) moreBtn.onclick = () => go('review', { queue: shuffle(more), i:0, revealed:false });
     return wireBack();
   }
-  const word = wordById(queue[i]);
+  const entry = queue[i];
+  const word = wordById(entry.id);
+  const pos = sessionLabel(i, queue);
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(screen().querySelector('#stage'), word,
-    { index:i, total:queue.length, revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
+    { index: pos.index-1, total: pos.total, revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
     {
       onReveal: () => go('review', { ...params, revealed:true }),
       onRerender: rerender,
       onGrade: async g => {
-        await srs.grade(word.id, g);
-        const next = { ...params, i:i+1, revealed:false };
-        if(g === 0) next.queue = [...queue, word.id];   // forgotten: comes back today
-        go('review', next);
+        await srs.grade(word.id, g, { relearn: entry.relearn });
+        const nextQueue = afterAnswer(queue, entry, g > 0);
+        go('review', { queue: nextQueue, i:i+1, revealed:false });
       }
     });
 };

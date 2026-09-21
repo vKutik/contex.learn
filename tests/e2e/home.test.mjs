@@ -67,6 +67,14 @@ describe('home', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a big backlog still reads as a small, finishable sitting', async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => i);
+    const page = await app.page(progress({ ids, next: daysAgo(1) }));
+    assert.equal((await buttons(page)).find(b => b.id === 'review').text, 'Review 5 words',
+      'the button counts this sitting, never the day\'s whole backlog');
+    await page.close_();
+  });
+
   test('with the daily cap spent, Learn says when it comes back rather than going quiet', async () => {
     const page = await app.page(afterFirstLesson({ opened: 1 }));
     const learn = (await buttons(page)).find(b => b.id === 'lesson');

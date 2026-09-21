@@ -59,11 +59,10 @@ export const doneToday = () => {
 
 export const budgetLeft = () => Math.max(0, DAILY_BUDGET - doneToday());
 
-/** Reviews graded today, and what the daily review cap still has room for -
- *  a big backlog is capped here rather than handed out all at once, so the
- *  rest waits for tomorrow instead of making the app feel unfinishable. */
-export const reviewsToday = () => store.reviewsToday();
-export const reviewQuotaLeft = () => Math.max(0, DAILY_REVIEW_LIMIT - reviewsToday());
+/** What the daily review cap still has room for today - a big backlog is
+ *  capped here rather than handed out all at once, so the rest waits for
+ *  tomorrow instead of making the app feel unfinishable. */
+const reviewQuotaLeft = () => Math.max(0, DAILY_REVIEW_LIMIT - store.reviewsToday());
 
 /** due(), most overdue first; ties broken by the lower box - the word with
  *  more riding on it comes first when two are equally late. */

@@ -68,18 +68,49 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
-  test('Forgot sends the word back to day one and asks it again in the same sitting', async () => {
+  test('Forgot gives the word one more, softer turn at the end of the same sitting', async () => {
     const page = await startReview(due(1, { box:3 }));
     await page.click('#show');
     await page.waitForSelector('[data-g="0"]');
     await page.click('[data-g="0"]');
     await page.waitForSelector('#show');
 
-    assert.equal(await page.textContent('.pill'), 'Review 2 of 2',
-      'a forgotten word joins the back of today\'s queue');
+    assert.equal(await page.textContent('.pill'), 'Review 1 of 1',
+      'the relearn turn is not a sixth card - the total due count never shows here');
     const saved = await savedProgress(page);
     assert.equal(saved.words['0'].box, 0);
     assert.equal(saved.words['0'].next, dateIn(1));
+    await page.close_();
+  });
+
+  test('the relearn turn does not change the due date again, whatever it scores', async () => {
+    const page = await startReview(due(1, { box:3 }));
+    await page.click('#show');
+    await page.waitForSelector('[data-g="0"]');
+    await page.click('[data-g="0"]');                 // the real, wrong grading: tomorrow
+    await page.waitForSelector('#show');
+    await page.click('#show');
+    await page.waitForSelector('[data-g="3"]');
+    await page.click('[data-g="3"]');                 // the relearn turn, scored Easy
+    await page.waitForSelector('.pagehead h1');
+
+    const saved = await savedProgress(page);
+    assert.equal(saved.words['0'].box, 0, 'still box 0 - the relearn score did not move it');
+    assert.equal(saved.words['0'].next, dateIn(1), 'still tomorrow');
+    await page.close_();
+  });
+
+  test('a card never gets a third turn, even if the relearn turn is missed too', async () => {
+    const page = await startReview(due(1));
+    await page.click('#show');
+    await page.waitForSelector('[data-g="0"]');
+    await page.click('[data-g="0"]');
+    await page.waitForSelector('#show');
+    await page.click('#show');
+    await page.waitForSelector('[data-g="0"]');
+    await page.click('[data-g="0"]');                 // missed the relearn turn too
+    await page.waitForSelector('.pagehead h1');
+    assert.equal(await page.textContent('.pagehead h1'), 'Done ✓');
     await page.close_();
   });
 
@@ -92,13 +123,38 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
       await page.waitForTimeout(150);
     }
     await page.waitForSelector('.pagehead h1');
-    assert.equal(await page.textContent('.pagehead h1'), 'Session done');
+    assert.equal(await page.textContent('.pagehead h1'), 'Done ✓');
     const rows = (await page.textContent('.card')).replace(/\s+/g,' ');
     assert.match(rows, /Reviewed\s*2/);
     assert.match(rows, /Right today\s*2/);
     assert.match(rows, /Forgotten today\s*0/);
+    assert.equal(await page.$('#more'), null, 'nothing left due - no "more" button to offer');
+    assert.ok(await page.$('[data-back="home"]'), 'a plain way to stop');
 
     assert.deepEqual(page.errors, []);
+    await page.close_();
+  });
+
+  test('a sitting is never more than five, however many are due', async () => {
+    const page = await startReview(due(12));
+    assert.equal(await page.textContent('.pill'), 'Review 1 of 5',
+      'a big backlog still starts as a small, finishable sitting');
+    await page.close_();
+  });
+
+  test('"more" pulls the next sitting, and the day\'s full due count is never shown', async () => {
+    const page = await startReview(due(7));
+    for(let i = 0; i < 5; i++){
+      await page.click('#show');
+      await page.waitForSelector('[data-g="2"]');
+      await page.click('[data-g="2"]');
+      await page.waitForTimeout(150);
+    }
+    await page.waitForSelector('#more');
+    assert.match(await page.textContent('#more'), /^2 more$/);
+    await page.click('#more');
+    await page.waitForSelector('.pill');
+    assert.equal(await page.textContent('.pill'), 'Review 1 of 2');
     await page.close_();
   });
 
