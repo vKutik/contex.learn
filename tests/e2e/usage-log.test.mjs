@@ -102,6 +102,43 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a page restored in the background repaints without a view transition',
+    async () => {
+      const page = await app.page(progress({ ids:[0,1,2] }));
+      await page.waitForSelector('#list');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });   // so motion is on the table at all
+      await page.evaluate(() => {
+        window.__transitions = 0;
+        const real = document.startViewTransition?.bind(document);
+        document.startViewTransition = cb => { window.__transitions++; return real(cb); };
+        Object.defineProperty(document, 'visibilityState', { configurable:true, get: () => 'hidden' });
+      });
+      await page.click('#list');
+      await page.waitForSelector('.list');
+      assert.equal(await page.evaluate(() => window.__transitions), 0, 'hidden: painted directly');
+      await page.close_();
+    });
+
+  test('a view transition the browser skips is not logged as an error', async () => {
+    const page = await app.page(progress({ ids:[0,1,2] }));
+    await page.waitForSelector('#list');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.evaluate(() => {
+      // what Safari hands back when it skips: every promise rejected
+      const skipped = () => Promise.reject(new DOMException(
+        'View transition was skipped because document visibility state is hidden.', 'InvalidStateError'));
+      document.startViewTransition = cb => { cb();
+        return { ready: skipped(), finished: skipped(), updateCallbackDone: Promise.resolve() }; };
+    });
+    await page.click('#list');
+    await page.waitForSelector('.list');
+    await page.click('[data-back]');
+    await page.waitForSelector('#list');
+    const { events } = await savedEvents(page, evs => evs.filter(x => x.e === 'screen').length >= 3);
+    assert.deepEqual(events.filter(x => x.e === 'error').map(x => x.msg), []);
+    await page.close_();
+  });
+
   test('settings shows the log and exports it, with the progress, as a file', async () => {
     const page = await app.page(progress({ ids:[0,1] }));
     await page.click('#settings');

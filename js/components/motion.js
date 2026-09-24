@@ -28,10 +28,19 @@ export function easeIn(el){
 export function paint(el, render, after){
   const done = () => { render(); if(after) after(); };
 
-  if(calm()) return done();
+  // a page restored in the background (iOS does this on every return) has
+  // nothing to animate: the browser would skip the transition and reject
+  // its promises, so paint straight away instead
+  if(calm() || document.visibilityState !== 'visible') return done();
 
   if(document.startViewTransition){
-    document.startViewTransition(done);   // true cross-fade, old and new
+    const t = document.startViewTransition(done);   // true cross-fade, old and new
+    // a transition skipped anyway (the tab hid mid-way, another started) is
+    // not an error: the new screen is painted either way. updateCallbackDone
+    // is left alone - it rejects only when render() itself threw, and that
+    // should reach the error log
+    const quiet = () => {};
+    t.ready?.catch(quiet); t.finished?.catch(quiet);
     return;
   }
   done();
