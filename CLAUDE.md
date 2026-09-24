@@ -3,8 +3,8 @@
 You are working on **ContextLearn**, a vocabulary trainer for 100 English
 words. It is a static site: plain ES6 modules, no framework, no build step,
 no dependencies. It is served by GitHub Pages at
-`https://vkutik.github.io/read.words/` from the `main` branch of
-`vKutik/Cards-`.
+`https://vkutik.github.io/contex.learn/` from the `main` branch of
+`vKutik/contex.learn`.
 
 The design idea the whole thing rests on: **a word is learned from the
 sentences around it, not from a card.** Cards introduce a word; real
@@ -21,7 +21,9 @@ backlog is bigger than what fits inside the daily answer budget — the
 schedule never buries a learner in the reviews it handed out itself.
 
 1. **Cards** — word, IPA, a human recording, definition, one example,
-   an antonym, and a familiarity indicator. Five cards.
+   an antonym, and a familiarity indicator. Five cards. The very first time
+   a word is met, its `plain` line — a wordless retelling of the first
+   example — sits under the definition, so an abstract word gets a picture.
 2. **Recall** — five gap fills, one per word, before the story. This is a
    retrieval attempt, and it deliberately avoids the sentence the card just
    showed.
@@ -39,7 +41,13 @@ shelf without touching its due date, and *Another word* walks the due queue.
 
 **Review.** Classic spaced repetition on the cards: recall prompt, reveal,
 then one of four grades (Forgot / Hard / Good / Easy) which sets the next
-due date from `STEPS`.
+due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
+between a cloze card and "what does this word mean". Reviews come in
+sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
+Forgot comes back three cards later rather than last, a second Forgot sends
+the word to tomorrow, and a sitting stops after 20 answers. The due queue
+is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
+waits at the front of tomorrow's.
 
 **Three generated quiz mechanics**, all built from the word list at run time
 so they never go stale:
@@ -129,7 +137,7 @@ is not part of the app and nothing references it.
 ### Data contracts
 
 ```js
-word     { id, word, pos, ipa, translation, definition, opposite, examples[] }
+word     { id, word, pos, ipa, translation, definition, opposite, examples[], plain? }
 lesson   { id, title, wordIds[5], text, quiz[] }
 passage  { id, w, slot, also[], text, sense?, source }
 question { type, question, options[], correctIndex }      // lesson quiz
@@ -197,7 +205,9 @@ clozeStats { [cardId]: { shown, correct, wrong, synonym } }
    option dims, the right answer lifts in amber, and a line says what the
    word means.
 10. **One tap is the answer.** No radio buttons, no submit buttons, no
-    keyboard input in the learning flow.
+    keyboard input in the learning flow. The one exception is typed cloze
+    answers, a setting the learner has to switch on; off by default, the
+    flow stays one tap.
 11. **Lists are rows with hairlines, not cards.** Do not nest a bordered,
     filled block inside a bordered card.
 
@@ -255,8 +265,16 @@ still the difference between fixing one and re-discovering it.
   `fresh.js` compares them and reloads a tab that is running replaced code;
   if the two drift apart the check is useless.
 
-**Git.** Develop on `claude/commit-and-push-4t5e0k`, then fast-forward
-`main` and push both. Do not open pull requests unless asked.
+**Git.** Develop on the session's `claude/…` branch, then fast-forward
+`main` and push both — `main` is what Pages serves. Do not open pull
+requests unless asked.
+
+**Editing cloze cards.** Change `cloze_all.json`, then run
+`python3 tools_cloze.py`; never edit `js/data/cloze.js` by hand. The script
+refuses a card that breaks the schema (one `____`, 8–16 words, blank not in
+the first two, five cards with five different anchors, `alt` never holding
+the answer), and `tests/data/cloze.test.mjs` fails if the module and the
+JSON drift apart.
 
 ---
 
