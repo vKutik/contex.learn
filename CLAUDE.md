@@ -198,7 +198,7 @@ build id, event name. Written by `telemetry.js`'s `track()`.
 | `e` | fields | where |
 |---|---|---|
 | `open` | `storage, vw, lang, due, rdue, opened` | boot |
-| `screen` | `name`, and `l, st` for a lesson stage | every `go()` |
+| `screen` | `name`, and `l, st` for a lesson stage | a `go()` that changes the screen or lesson stage |
 | `answer` | `at` (recall/lesson/reading), `k` (mechanic), `w, ok, out` (correct/wrong/synonym), `ms, pick`, `said` when typed, `card` for a cloze card, `l` or `p, st` | every quiz answer |
 | `lesson_done` | `l, score, total` | end of a lesson quiz |
 | `reveal` | `w, mode` (cloze/meaning), `card` if a cloze card, `ms` | review, "Show answer" |

@@ -155,6 +155,23 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a screen is logged when it changes, not on every reveal and grade', async () => {
+    const page = await app.page(progress({ ids:[0,1,2], next: daysAgo(1) }));
+    await page.click('#review');
+    for(let i = 0; i < 3; i++){
+      await page.waitForSelector('#show');
+      await page.click('#show');
+      await page.waitForSelector('[data-g="2"]');
+      await page.click('[data-g="2"]');
+    }
+    await page.waitForSelector('.pagehead h1');
+    await page.click('[data-back]');
+    const { events } = await savedEvents(page, evs => evs.filter(x => x.e === 'grade').length === 3
+      && evs.filter(x => x.e === 'screen').length >= 3);
+    assert.deepEqual(events.filter(x => x.e === 'screen').map(x => x.name), ['home', 'review', 'home']);
+    await page.close_();
+  });
+
   test('settings shows the log and exports it, with the progress, as a file', async () => {
     const page = await app.page(progress({ ids:[0,1] }));
     await page.click('#settings');

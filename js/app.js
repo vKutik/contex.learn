@@ -30,11 +30,16 @@ const routes = {};
 let current = { name:'home', params:{} };
 /* The one way a screen changes. Nothing outside this file calls it -
    app.js is the entry point, not a library. */
+let shownScreen = null;
 function go(name, params = {}){
   hideTooltip();
   current = { name, params };
-  // a lesson is four screens under one name: say which one, and of which lesson
-  track('screen', name === 'lesson' ? { name, l: params.id, st: params.stage ?? 0 } : { name });
+  // a lesson is four screens under one name: say which one, and of which lesson.
+  // Logged only when that changes - a reveal, a grade or the next card is the
+  // same screen, and the answer and grade events already say what happened
+  const where = name === 'lesson' ? { name, l: params.id, st: params.stage ?? 0 } : { name };
+  const key = JSON.stringify(where);
+  if(key !== shownScreen){ shownScreen = key; track('screen', where); }
   paint(screen(), () => routes[name](params), () => window.scrollTo(0,0));
 }
 /** Same screen, fresh content - a card stepping to its next example. */
