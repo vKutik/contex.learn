@@ -129,6 +129,13 @@ test('every comprehension question is answerable in one tap', () => {
   }
 });
 
+test('every comprehension question names the lesson word it checks', () => {
+  for(const l of lessons)
+    for(const q of l.quiz)
+      assert.ok(l.wordIds.includes(q.wordId),
+        `lesson ${l.id}: "${q.question}" is not tied to one of its words - its answer would log w:null`);
+});
+
 /* ---------- passages ---------- */
 
 test('a passage can be looked up by its id, because the reader indexes the array', () => {

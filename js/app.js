@@ -210,11 +210,13 @@ function lessonReading(lesson){
   wireBack();
 }
 function lessonQuiz(lesson, ws){
-  // the story's own comprehension questions, then one of the three word
-  // mechanics on a word from today - which one is left to the draw
+  // the story's own comprehension questions, each tied to one of today's
+  // words, then one of the three word mechanics for every word they leave
+  // out - so the score covers all five, and every answer names its word
+  const asked = new Set(lesson.quiz.map(q => q.wordId));
   const questions = [
     ...lesson.quiz,
-    anyQuestion(one(ws), words)
+    ...ws.filter(w => !asked.has(w.id)).map(w => anyQuestion(w, words))
   ];
   screen().innerHTML = `<h1>${lesson.title}</h1><div id="stage"></div>`;
   runQuiz(stageEl(), questions, {

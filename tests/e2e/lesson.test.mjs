@@ -7,7 +7,7 @@
  */
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { openApp, browserSkip, answer, savedProgress } from '../helpers/browser.mjs';
+import { openApp, browserSkip, answer, savedProgress, savedEvents } from '../helpers/browser.mjs';
 import { progress } from '../helpers/seed.mjs';
 
 describe('a lesson end to end', { skip: browserSkip ?? false, concurrency: 1 }, () => {
@@ -118,18 +118,23 @@ describe('a lesson end to end', { skip: browserSkip ?? false, concurrency: 1 }, 
     await page.close_();
   });
 
-  test('the quiz asks the story\'s own questions plus one word check, then scores the lesson',
+  test('the quiz covers all five words - the story\'s own questions plus a check for each word they leave out',
     async () => {
       const page = await app.page(progress({ ids:[0,1,2,3,4], lessons:{ 1:'quiz' } }));
       await page.click('#lesson');
       await page.waitForSelector('[data-k]');
 
       const total = +(await page.textContent('.pill')).match(/of (\d+)/)[1];
-      assert.equal(total, 3, 'two comprehension questions and one generated check');
+      assert.equal(total, 5, 'two comprehension questions and three generated checks');
       for(let i = 0; i < total; i++) await answer(page, 0);
 
       await page.waitForSelector('.pagehead h1');
       assert.match(await page.textContent('.pagehead h1'), new RegExp(`^\\d of ${total}$`));
+      const { events } = await savedEvents(page, ev => ev.some(x => x.e === 'lesson_done'));
+      const said = events.filter(x => x.e === 'answer');
+      assert.deepEqual([...new Set(said.map(x => x.w))].sort((a,b) => a-b), [0,1,2,3,4],
+        'every answer names its word, and every word is asked');
+      assert.equal(events.find(x => x.e === 'lesson_done').total, 5);
 
       const buttons = await page.$$eval('#screen button.go', bs =>
         bs.map(b => ({ text:b.textContent.trim(), ghost:b.className.includes('ghost') })));
@@ -170,7 +175,7 @@ describe('a lesson end to end', { skip: browserSkip ?? false, concurrency: 1 }, 
     const wordMisses = ['0','1','2','3','4'].reduce((n, id) => n + saved.words[id].wrong, 0);
     assert.ok(wordMisses <= cardMisses, 'a recall miss is on the word as well as on its card');
     const log = Object.values(saved.log)[0];
-    assert.equal(log.right + log.wrong, 8, 'five recall answers and three quiz answers');
+    assert.equal(log.right + log.wrong, 10, 'five recall answers and five quiz answers');
     assert.deepEqual(page.errors, []);
     await page.close_();
   });

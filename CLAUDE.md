@@ -32,8 +32,9 @@ schedule never buries a learner in the reviews it handed out itself.
 3. **Reading** — one short text using all five words. Tapping a highlighted
    word opens a tooltip with its transcription, a speaker button and its
    meaning; the text does not move.
-4. **Quiz** — the story's own comprehension questions plus one generated
-   check on a word from today.
+4. **Quiz** — the story's own comprehension questions, each tied to one of
+   today's words by `wordId`, plus one generated check for every word they
+   leave out — so the score covers all five.
 
 **Reading practice.** Every word owns a shelf of **ten** passages. The
 schedule brings one word back per interval (1, 3, 7, 16, 35, 90, 180 days,
@@ -151,7 +152,7 @@ js/
 word     { id, word, pos, ipa, translation, definition, opposite, examples[], plain? }
 lesson   { id, title, wordIds[5], text, quiz[] }
 passage  { id, w, slot, also[], text, sense?, source }
-question { type, question, options[], correctIndex }      // lesson quiz
+question { type, question, options[], correctIndex, wordId }  // lesson quiz
 cloze    { id: 'wordId:n', s, a, t, alt[], why{} }        // cloze.js[wordId][n]
 ```
 
