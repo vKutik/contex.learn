@@ -13,7 +13,7 @@ import { clozeFor } from '../../js/data.js';
 import { words } from '../../js/data/words.js';
 import * as store from '../../js/storage.js';
 import * as srs from '../../js/srs.js';
-import { fresh } from '../helpers/fixture.mjs';
+import { fresh, seedWord } from '../helpers/fixture.mjs';
 
 beforeEach(fresh);
 
@@ -171,4 +171,20 @@ test('worstCards lists the most-missed cards first, and only those shown three t
   assert.deepEqual(worst.map(c => c.id), ['5:0','5:1']);
   assert.equal(worst[0].card.id, '5:0', 'the card itself comes along, so it can be read');
   assert.ok(Math.abs(worst[0].rate - 2/3) < 1e-9);
+});
+
+test('a tricky word\'s gap fill uses an unseen card, then the worst - never the one just met', async () => {
+  await seedWord(0, { wrong:6, box:1 });
+  const ids = clozeFor(0).map(c => c.id);
+  for(const id of ids.slice(0, 3)) await store.markClozeSeen(0, id);
+  assert.ok(!ids.slice(0, 3).includes(pickCloze(0).id), 'an unseen card while one is left');
+
+  for(const id of ids) await store.markClozeSeen(0, id);   // all met, ids.at(-1) last
+  await store.countCloze(ids[1], 'wrong');                  // 1 of 1 missed
+  await store.countCloze(ids.at(-1), 'wrong');              // just as bad, but met last
+  await store.countCloze(ids.at(-1), 'wrong');
+  assert.equal(pickCloze(0).id, ids[1]);
+
+  await seedWord(0, { wrong:6, box:3 });                    // no longer tricky: the usual rule
+  assert.equal(pickCloze(0).id, ids[0], 'the card met longest ago');
 });

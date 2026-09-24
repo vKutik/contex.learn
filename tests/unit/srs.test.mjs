@@ -312,7 +312,40 @@ test('a word becomes a leech at LEECH_AT misses, not before', async () => {
   assert.equal(srs.isLeech(99), false, 'a word never opened is not a leech');
 });
 
-/* ---------- the reading ladder ---------- */
+test('tricky is a state: box 3 clears it, dropping below box 3 brings it back', async () => {
+  await seedWord(0, { wrong:6, box:1 });
+  assert.equal(srs.isLeech(0), true, 'wrong 6, box 1: tricky');
+  await seedWord(0, { wrong:6, box: srs.LEECH_CLEAR_BOX });
+  assert.equal(srs.isLeech(0), false, 'wrong 6, box 3: known well enough, the tag clears');
+  await srs.grade(0, 0);                                    // forgotten again: box 0
+  assert.equal(store.getWord(0).box, 0);
+  assert.equal(srs.isLeech(0), true, 'back below box 3: tricky again');
+});
+
+/* ---------- which cloze card a tricky word gets ---------- */
+
+const cards = ['9:3','9:0','9:1','9:2','9:4'].map(id => ({ id }));
+
+test('trickyCard: a card never met comes first', () => {
+  assert.equal(srs.trickyCard(cards, ['9:3','9:0'], {}).id, '9:1');
+});
+
+test('trickyCard: all met, the worst record wins - but never the card met last', () => {
+  const seen = ['9:3','9:0','9:1','9:2','9:4'];               // 9:4 met last
+  const stats = {
+    '9:3': { shown:4, wrong:1 }, '9:0': { shown:2, wrong:0 }, '9:1': { shown:3, wrong:2 },
+    '9:2': { shown:5, wrong:1 }, '9:4': { shown:2, wrong:2 }   // worst of all, but just failed
+  };
+  assert.equal(srs.trickyCard(cards, seen, stats).id, '9:1', '2 of 3 missed, and not the last one');
+  assert.equal(srs.trickyCard(cards, ['9:0','9:1','9:2','9:4','9:3'], stats).id, '9:4',
+    'once another card was met after it, the worst is fair game again');
+});
+
+test('trickyCard: equal records go to the card met longest ago; one card is still a card', () => {
+  assert.equal(srs.trickyCard(cards, ['9:2','9:3','9:0','9:1','9:4'], {}).id, '9:2');
+  assert.equal(srs.trickyCard([{ id:'9:3' }], ['9:3'], {}).id, '9:3');
+  assert.equal(srs.trickyCard([], [], {}), null);
+});
 
 test('answering from the text widens the gap, missing it goes back to day one', async () => {
   await srs.introduce(0);

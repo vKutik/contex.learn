@@ -110,12 +110,17 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
-  test('a leech is asked for its meaning, never the cloze that keeps failing it', async () => {
-    const state = due(1);                    // seen 0 would normally ask the cloze
+  test('a tricky word is still asked as a cloze, in a sentence it has not met', async () => {
+    const state = due(1, { clozeSeen:{ 0:['0:3'] } });   // seen 0 asks the cloze
     state.words[0].wrong = 6;
     const page = await startReview(state);
-    assert.match(await page.textContent('.card'), /What does this word mean\?/);
-    assert.equal(await page.$('.cloze'), null);
+    assert.ok(await page.$('.cloze'), 'context practice is kept for the words that need it most');
+    await page.click('#show');
+    await page.click('[data-g="2"]');
+    await page.waitForFunction(() =>
+      JSON.parse(localStorage.getItem('vocab-progress')).clozeSeen[0].length === 2);
+    const seen = (await savedProgress(page)).clozeSeen[0];
+    assert.notEqual(seen[1], '0:3', 'a fresh sentence, not the one already met');
     await page.close_();
   });
 

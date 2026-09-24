@@ -103,11 +103,38 @@ export const BACKLOG_LIMIT = 10;
 export const unsettledCount = () =>
   Object.values(store.snapshot().words).filter(w => w.box === 0).length;
 
-/** Missed this many times in all, a word is a leech: the card is not
- *  working for it, so the review asks for its meaning instead of the same
- *  cloze, and the word list marks it. */
+/** A leech - "tricky" in the word list - is a word missed LEECH_AT times in
+ *  all that has not yet climbed back to LEECH_CLEAR_BOX. It is a state, not a
+ *  sentence: reaching box 3 clears it, dropping below box 3 brings it back.
+ *  While tricky, its cloze prompts come from a fresh sentence (trickyCard). */
 export const LEECH_AT = 5;
-export const isLeech = id => (store.getWord(id)?.wrong || 0) >= LEECH_AT;
+export const LEECH_CLEAR_BOX = 3;
+export const isLeech = id => {
+  const w = store.getWord(id);
+  return !!w && (w.wrong || 0) >= LEECH_AT && (w.box || 0) < LEECH_CLEAR_BOX;
+};
+
+/**
+ * Which cloze card a tricky word gets - pure: it is handed the cards (already
+ * in their preferred order), the ids met, oldest first, and the per-card
+ * stats. In order:
+ *   a) a card never met;
+ *   b) otherwise the card with the worst record (wrong / shown), ties to the
+ *      one met longest ago;
+ *   c) never the card met last, when another exists. The store does not say
+ *      which card was *failed* last; the one met last is the closest signal,
+ *      and avoiding it avoids the failed one whenever that meeting was a miss.
+ */
+export function trickyCard(cards, seen, stats){
+  if(!cards.length) return null;
+  const fresh = cards.find(c => !seen.includes(c.id));
+  if(fresh) return fresh;
+  const last = seen[seen.length - 1];
+  const pool = cards.length > 1 ? cards.filter(c => c.id !== last) : cards;
+  const rate = c => { const x = stats[c.id]; return x && x.shown ? x.wrong / x.shown : 0; };
+  return pool.slice().sort((a, b) =>
+    rate(b) - rate(a) || seen.indexOf(a.id) - seen.indexOf(b.id))[0];
+}
 
 /** Open one more batch of five right now, without moving the cap itself. */
 export const grantMore = () => store.grantNewWords();

@@ -300,8 +300,7 @@ routes.review = params => {
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(stageEl(), word,
     { ...session.progress(sess), revealed, fam: famOf(word.id),
-      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0,
-      leech: srs.isLeech(word.id) },
+      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0 },
     {
       onReveal: (mode, card) => {
         revealAt = Date.now();
@@ -475,7 +474,7 @@ routes.list = ({ leeches = false } = {}) => {
       <div class="ihead">
         <b>${w.word}</b>
         ${familiarityDots(famOf(w.id))}
-        ${srs.isLeech(w.id) ? `<span class="tag" title="missed ${srs.LEECH_AT} times or more">tricky</span>` : ''}
+        ${srs.isLeech(w.id) ? `<span class="tag" title="missed ${srs.LEECH_AT} times or more - clears once it reaches box ${srs.LEECH_CLEAR_BOX}">tricky</span>` : ''}
         <span class="ipos">/${w.ipa}/ · ${w.pos}</span>
         <button class="say tiny" data-say="${w.id}">🔊</button>
       </div>

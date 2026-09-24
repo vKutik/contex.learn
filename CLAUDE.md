@@ -48,9 +48,13 @@ shelf without touching its due date, and *Another word* walks the due queue.
 **Review.** Classic spaced repetition on the cards: recall prompt, reveal,
 then one of four grades (Forgot / Hard / Good / Easy) which sets the next
 due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
-between a cloze card and "what does this word mean" — except for a *leech*,
-a word missed `LEECH_AT` (5) times in all, which is always asked for its
-meaning. The word list marks leeches "tricky" and can show only them. Reviews come in
+between a cloze card and "what does this word mean". A *leech* — "tricky"
+in the word list, which can show only them — is a word missed `LEECH_AT` (5)
+times in all and still below `LEECH_CLEAR_BOX` (box 3): a state, not a
+sentence, it clears at box 3 and returns if the word drops below it. A
+tricky word alternates like any other, but its cloze comes from
+`srs.trickyCard`: a card never met, else the worst record in `clozeStats`,
+never the card met last when another exists. Reviews come in
 sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
 Forgot comes back three cards later rather than last (never with fewer than
 two others between — with fewer left it waits for tomorrow), a second Forgot
@@ -75,7 +79,7 @@ five hand-written cards (`js/data/cloze.js`, generated from `cloze_all.json`
 by `tools_cloze.py`). `pickCloze` in `quiz.js` is the only place a card is
 chosen: never the sentence just read, a card not met yet in the order
 definition → consequence → cause → contrast → collocation, then the one met
-longest ago. Wrong pills never include a word the card's `alt` accepts, one
+longest ago (a tricky word: see Review). Wrong pills never include a word the card's `alt` accepts, one
 sharing the answer's root, or a `CONFLICTS` neighbour. A miss shows the
 sentence filled in, the definition and — when the tapped word is one the
 card was written against — its `why`. Typing the answer is a setting, off by
@@ -290,7 +294,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 309 tests, about 35 seconds
+node tests/run.mjs            # 314 tests, about 35 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

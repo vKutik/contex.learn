@@ -16,17 +16,17 @@ const GRADES = [
  * @param {HTMLElement} container
  * @param {object} word
  * @param {{done:number, total:number, revealed:boolean, step:string,
- *          seen:number, leech?:boolean, fam?:object}} pos  `step` is the label
- *          of the word's step, `seen` how many times it has been reviewed,
- *          `leech` whether it has been missed so often the cloze is set aside
+ *          seen:number, fam?:object}} pos  `step` is the label of the word's
+ *          step, `seen` how many times it has been reviewed
  * @param {{onReveal:(mode:string, cardId?:string)=>void, onGrade:(g:number)=>void, onRerender:Function}} handlers
  *   `mode` is which prompt was asked: 'cloze' or 'meaning'; the second
  *   argument is the cloze card's id when one was shown.
  */
 export function renderReview(container, word, pos, handlers){
   // alternate between "which word is missing" and "what does it mean" - a
-  // leech, which the cloze cards keep failing, is asked for its meaning
-  const askCloze = !pos.leech && pos.seen % 2 === 0;
+  // tricky word too: context is what it needs most, and pickCloze gives it
+  // a fresh sentence rather than the one it keeps failing
+  const askCloze = pos.seen % 2 === 0;
   // the same card on both sides of the reveal: nothing is recorded until the
   // grade, so asking twice gives the same answer
   const card = askCloze ? pickCloze(word.id) : null;

@@ -18,6 +18,7 @@ import { shuffle, one } from '../util.js';
 import { clozeFor } from '../data.js';
 import { typesCloze } from '../settings.js';
 import * as store from '../storage.js';
+import { isLeech, trickyCard } from '../srs.js';
 
 /* ---------- small helpers ---------- */
 const matchCase = (text, model) => !text ? text
@@ -106,6 +107,8 @@ const byAnchor = (a, b) => ANCHOR_ORDER.indexOf(a.t) - ANCHOR_ORDER.indexOf(b.t)
  *    other, since several cards grow out of the card's own examples
  *  - a card not met before, in ANCHOR_ORDER
  *  - once all have been met, the one met longest ago
+ *  - for a tricky word (srs.isLeech), srs.trickyCard decides instead: never
+ *    met, else worst record, never the card met last
  *
  * @returns {object|null} the card, or null when the word has none to give
  */
@@ -119,6 +122,7 @@ export function pickCloze(wordId, { avoidSentence } = {}){
   const cards = clozeFor(wordId).filter(c => !isAvoided(c));
   if(!cards.length) return null;
   const seen = store.clozeSeen(wordId);
+  if(isLeech(wordId)) return trickyCard(cards.slice().sort(byAnchor), seen, store.clozeStats());
   const fresh = cards.filter(c => !seen.includes(c.id)).sort(byAnchor);
   if(fresh.length) return fresh[0];
   return seen.map(id => cards.find(c => c.id === id)).find(Boolean);
