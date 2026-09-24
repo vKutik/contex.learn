@@ -143,7 +143,7 @@ test('fresh.js only uses sessionStorage, and only for the reload guard', () => {
 /* ---------- rule 2: srs.js has no DOM ---------- */
 
 test('the scheduling rules could move to a server untouched', () => {
-  for(const file of ['js/srs.js', 'js/util.js', 'js/data.js']){
+  for(const file of ['js/srs.js', 'js/session.js', 'js/util.js', 'js/data.js']){
     assert.deepEqual(
       linesMatching(code[file], /\b(document|window|navigator|localStorage|alert|HTMLElement)\b/), [],
       `${file} reaches for the browser - it is meant to be portable logic`);

@@ -84,6 +84,7 @@ js/
   data.js                  the data contract (re-exports + helpers)
   storage.js               the ONLY module that persists progress
   srs.js                   scheduling rules, no DOM
+  session.js               one review sitting's rules, no DOM
   settings.js              app preferences, the developer unlock
   util.js                  shuffle, one
   fresh.js                 reloads a tab running a replaced build
@@ -210,7 +211,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 196 tests, about 20 seconds
+node tests/run.mjs            # 221 tests, about 20 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

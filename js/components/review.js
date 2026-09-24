@@ -5,7 +5,7 @@ import * as srs from '../srs.js';
 import * as store from '../storage.js';
 
 const GRADES = [
-  { g:0, label:'Forgot', note:'again today',      cls:'g0' },
+  { g:0, label:'Forgot', note:'again soon',       cls:'g0' },
   { g:1, label:'Hard',   note:'same interval',    cls:''   },
   { g:2, label:'Good',   note:'next interval',    cls:''   },
   { g:3, label:'Easy',   note:'skip an interval', cls:'g3' }
@@ -14,7 +14,7 @@ const GRADES = [
 /**
  * @param {HTMLElement} container
  * @param {object} word
- * @param {{index:number,total:number,revealed:boolean,fam?:object}} pos
+ * @param {{done:number,total:number,revealed:boolean,fam?:object}} pos
  * @param {{onReveal:Function, onGrade:(g:number)=>void, onRerender:Function}} handlers
  */
 export function renderReview(container, word, pos, handlers){
@@ -25,7 +25,7 @@ export function renderReview(container, word, pos, handlers){
     const askCloze = seen % 2 === 0;
     container.innerHTML = `
       <div class="top">
-        <span class="pill">Review ${pos.index+1} of ${pos.total}</span>
+        <span class="pill">Done ${pos.done} of ${pos.total}</span>
         <span class="pill">${srs.STEP_NAME[srs.stepOf(word.id)]}</span>
       </div>
       <div class="card">

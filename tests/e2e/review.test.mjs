@@ -1,8 +1,10 @@
 /* The review screen: recall, reveal, grade.
  *
  * The screen itself is small; what matters is that the grade a learner taps
- * becomes the date srs.js promised, and that a forgotten word really does
- * come back in the same sitting rather than tomorrow.
+ * becomes the date srs.js promised, that a forgotten word really does come
+ * back soon rather than tomorrow, and that none of this can make the sitting
+ * look bigger than it started - a wrong answer used to push the total up and
+ * that is the exact complaint this screen exists to fix.
  */
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,10 +26,18 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     return page;
   };
 
+  /** The "Done x of y" pill, parsed. */
+  const donePill = async page => {
+    const text = await page.textContent('.pill');
+    const m = text.match(/^Done (\d+) of (\d+)$/);
+    assert.ok(m, `pill did not read "Done n of m": "${text}"`);
+    return { done: +m[1], total: +m[2] };
+  };
+
   test('it asks for recall before it shows anything', async () => {
     const page = await startReview(due(3));
     assert.deepEqual(await page.$$eval('.pill', p => p.map(x => x.textContent)),
-      ['Review 1 of 3', 'Started']);
+      ['Done 0 of 3', 'Started']);
     assert.equal(await page.$$eval('.grade', e => e.length), 0, 'the grades are not offered yet');
     assert.match(await page.textContent('.card'), /Recall it yourself/);
     await page.close_();
@@ -50,7 +60,7 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
       bs.map(b => b.textContent.replace(b.querySelector('small').textContent, '').trim())),
       ['Forgot','Hard','Good','Easy']);
     assert.deepEqual(await page.$$eval('.grade small', ss => ss.map(s => s.textContent)),
-      ['again today','same interval','next interval','skip an interval']);
+      ['again soon','same interval','next interval','skip an interval']);
     await page.close_();
   });
 
@@ -68,22 +78,42 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
-  test('Forgot sends the word back to day one and asks it again in the same sitting', async () => {
+  test('Forgot brings the word back soon, in the same sitting, without growing it', async () => {
     const page = await startReview(due(1, { box:3 }));
+    let pill = await donePill(page);
+    assert.deepEqual(pill, { done:0, total:1 });
+
     await page.click('#show');
     await page.waitForSelector('[data-g="0"]');
     await page.click('[data-g="0"]');
-    await page.waitForSelector('#show');
+    await page.waitForSelector('#show', { timeout: 5000 }); // asked again, not the done screen
 
-    assert.equal(await page.textContent('.pill'), 'Review 2 of 2',
-      'a forgotten word joins the back of today\'s queue');
+    pill = await donePill(page);
+    assert.deepEqual(pill, { done:0, total:1 },
+      'still not finished, and the total never grew past the one word due');
     const saved = await savedProgress(page);
     assert.equal(saved.words['0'].box, 0);
     assert.equal(saved.words['0'].next, dateIn(1));
     await page.close_();
   });
 
-  test('the session ends with what was done, and one way out', async () => {
+  test('a word forgotten twice is dropped and named under "Back tomorrow"', async () => {
+    const page = await startReview(due(1, { box:2 }));
+    for(let i = 0; i < 2; i++){
+      await page.click('#show');
+      await page.waitForSelector('[data-g="0"]');
+      await page.click('[data-g="0"]');
+    }
+    await page.waitForSelector('.pagehead h1');
+    assert.equal(await page.textContent('.pagehead h1'), 'Session done');
+    const card = (await page.textContent('.card')).replace(/\s+/g,' ');
+    assert.match(card, /Remembered\s*0/);
+    assert.match(card, /Back tomorrow/);
+    assert.match(card, /shallow/, 'the dropped word is named');
+    await page.close_();
+  });
+
+  test('the session ends with what was remembered, and one way out', async () => {
     const page = await startReview(due(2));
     for(let i = 0; i < 2; i++){
       await page.click('#show');
@@ -94,10 +124,10 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.waitForSelector('.pagehead h1');
     assert.equal(await page.textContent('.pagehead h1'), 'Session done');
     const rows = (await page.textContent('.card')).replace(/\s+/g,' ');
-    assert.match(rows, /Reviewed\s*2/);
-    assert.match(rows, /Right today\s*2/);
-    assert.match(rows, /Forgotten today\s*0/);
+    assert.match(rows, /Remembered\s*2/);
+    assert.doesNotMatch(rows, /Back tomorrow/, 'nothing was dropped');
 
+    assert.equal(await page.$('#more'), null, 'nothing left due, so no "Next" button');
     assert.deepEqual(page.errors, []);
     await page.close_();
   });
@@ -109,6 +139,37 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.click('[data-g="3"]');
     await page.waitForSelector('.pagehead h1');
     assert.deepEqual((await savedProgress(page)).rsched['0'], { step:3, next: dateIn(9) });
+    await page.close_();
+  });
+
+  test('a big backlog is still a small sitting, and a miss cannot grow the total', async () => {
+    const page = await app.page(due(12));
+    assert.equal(await page.textContent('#review'), 'Review 7 words',
+      'the button offers a sitting, not the whole backlog');
+    await page.click('#review');
+    await page.waitForSelector('#show');
+
+    let lastDone = -1;
+    let ended = false;
+    for(let i = 0; i < 20 && !ended; i++){
+      const { done, total } = await donePill(page);
+      assert.equal(total, 7, 'the total holds however many were graded');
+      assert.ok(done >= lastDone, `the counter went from ${lastDone} to ${done}`);
+      lastDone = done;
+
+      await page.click('#show');
+      await page.waitForSelector('.grade');
+      await page.click(`[data-g="${i < 4 ? 0 : 2}"]`);   // forget a few, then remember the rest
+      await Promise.race([
+        page.waitForSelector('#show'),
+        page.waitForSelector('.pagehead h1')
+      ]);
+      ended = await page.$('.pagehead h1') !== null;
+    }
+
+    assert.equal(await page.textContent('.pagehead h1'), 'Session done');
+    assert.equal(await page.textContent('#more'), 'Next 5 words',
+      '12 due, 7 taken into the sitting, 5 still waiting');
     await page.close_();
   });
 });

@@ -6,6 +6,7 @@ import { words, lessons, passages, wordById, lessonWords, openPassages,
          shelfOf, DAILY_BUDGET } from './data.js';
 import * as store from './storage.js';
 import * as srs from './srs.js';
+import * as session from './session.js';
 import * as settings from './settings.js';
 import { progressRing, familiarityDots } from './components/progress.js';
 import { renderFlashcard } from './components/flashcard.js';
@@ -60,6 +61,7 @@ function scoreScreen(score, total, note, buttons){
 routes.home = () => {
   const dueAll   = srs.dueSorted();
   const queue    = srs.reviewQueue();
+  const batch    = queue.slice(0, session.SESSION_SIZE);
   const carriedOver = dueAll.length - queue.length;
   const wait     = srs.unlockIn();
   const openIds  = srs.introducedIds();
@@ -77,7 +79,7 @@ routes.home = () => {
      "New words in 12h" ended up the loudest element on the screen while the
      one thing you could press sat in an outline. */
   const actions = [
-    queue.length && { id:'review', label:`Review ${queue.length} word${queue.length===1?'':'s'}` },
+    batch.length && { id:'review', label:`Review ${batch.length} word${batch.length===1?'':'s'}` },
     { id:'lesson',  label: lessonLabel(lesson, wait), off: !lesson },
     { id:'reading', label:'Reading practice', off: !reading.length },
     { id:'list',    label:'Word list' }
@@ -90,7 +92,7 @@ routes.home = () => {
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +
     `<button class="linkbtn" id="settings">Settings</button>`;
   const on = (id, fn) => { const el = screen().querySelector('#'+id); if(el) el.onclick = fn; };
-  on('review',   () => go('review',  { queue: shuffle(queue), i:0, revealed:false }));
+  on('review',   () => go('review',  { session: session.startSession(shuffle(batch)), revealed:false }));
   on('lesson',   () => lesson && go('lesson', { id: lesson.id, stage: resumeStage(lesson) }));
   on('reading',  () => go('reading'));
   on('list',     () => go('list'));
@@ -219,29 +221,35 @@ function lessonQuiz(lesson, ws){
 }
 /* ---------------- review ---------------- */
 routes.review = params => {
-  const { queue, i, revealed } = params;
-  if(i >= queue.length){
-    const log = store.todayLog();
+  const { session: sess, revealed } = params;
+  if(session.isFinished(sess)){
+    const remembered = sess.remembered.length;
+    const backTomorrow = sess.dropped.map(id => wordById(id).word);
+    const more = srs.reviewQueue().slice(0, session.SESSION_SIZE);
     screen().innerHTML = pageHead('Session done') + `
       <div class="card">
-        <div class="row"><span>Reviewed</span><b>${queue.length}</b></div>
-        <div class="row"><span>Right today</span><b>${log.right}</b></div>
-        <div class="row"><span>Forgotten today</span><b>${log.wrong}</b></div>
-      </div>${backButton('Back','home')}`;
+        <div class="row"><span>Remembered</span><b>${remembered}</b></div>
+        ${backTomorrow.length
+          ? `<div class="row"><span>Back tomorrow</span><b>${backTomorrow.join(', ')}</b></div>`
+          : ''}
+      </div>
+      ${more.length ? `<button class="go" id="more">Next ${more.length} word${more.length===1?'':'s'}</button>
+         <button class="go ghost" data-back="home">Back</button>`
+        : backButton('Back','home')}`;
+    if(more.length) screen().querySelector('#more').onclick = () =>
+      go('review', { session: session.startSession(shuffle(more)), revealed:false });
     return wireBack();
   }
-  const word = wordById(queue[i]);
+  const word = wordById(session.current(sess));
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(screen().querySelector('#stage'), word,
-    { index:i, total:queue.length, revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
+    { ...session.progress(sess), revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
     {
       onReveal: () => go('review', { ...params, revealed:true }),
       onRerender: rerender,
       onGrade: async g => {
         await srs.grade(word.id, g);
-        const next = { ...params, i:i+1, revealed:false };
-        if(g === 0) next.queue = [...queue, word.id];   // forgotten: comes back today
-        go('review', next);
+        go('review', { session: session.answer(sess, word.id, g), revealed:false });
       }
     });
 };
