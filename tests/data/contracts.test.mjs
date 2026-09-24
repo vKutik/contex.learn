@@ -13,7 +13,7 @@ import { words } from '../../js/data/words.js';
 import { lessons } from '../../js/data/lessons.js';
 import { passages } from '../../js/data/passages.js';
 import { pronunciations } from '../../js/data/pronunciation.js';
-import { wordById, lessonWords, shelfOf, openPassages, DAILY_NEW_LIMIT } from '../../js/data.js';
+import { wordById, lessonWords, shelfOf, DAILY_NEW_LIMIT } from '../../js/data.js';
 import { surfaceOf, blankOf } from '../../js/components/word.js';
 import { abs } from '../helpers/paths.mjs';
 
@@ -136,6 +136,23 @@ test('a passage can be looked up by its id, because the reader indexes the array
     `passages.js must stay in id order: index ${i} holds id ${p.id}`));
 });
 
+/* `plain` is the wordless retelling a new word's card shows under its
+   definition - a picture for an abstract word. It must not give the word away. */
+test('a word\'s plain scene is one short sentence that never names the word', () => {
+  const stem = w => w.toLowerCase().replace(/(ing|edly|ly|ied|ies|es|ed|s|y)$/, '');
+  for(const w of words){
+    if(w.plain === undefined) continue;
+    assert.equal(typeof w.plain, 'string', `${w.word}: plain must be a string`);
+    assert.ok(w.plain.length > 0 && w.plain.length <= 90, `${w.word}: plain must be 1-90 characters`);
+    assert.ok(!/[{}]/.test(w.plain), `${w.word}: plain carries no {braces}`);
+    assert.equal((w.plain.match(/[.!?]/g) || []).length, 1, `${w.word}: plain is one sentence`);
+    assert.match(w.plain.trim(), /[.!?]$/, `${w.word}: plain ends its sentence`);
+    const tokens = w.plain.toLowerCase().replace(/[.,!?;:]/g, '').split(/\s+/);
+    assert.ok(!tokens.some(t => t === w.word.toLowerCase() || stem(t) === stem(w.word)),
+      `${w.word}: plain must not give the word away`);
+  }
+});
+
 test('every word owns a full shelf of ten, numbered 0 to 9', () => {
   assert.equal(passages.length, words.length * 10);
   for(const w of words){
@@ -181,12 +198,6 @@ test('a passage has a text and a source field, even when the source is empty', (
   }
 });
 
-test('openPassages opens a word\'s shelf and nothing else', () => {
-  const open = openPassages(new Set([0]));
-  assert.equal(open.length, 10);
-  assert.ok(open.every(p => p.w === 0));
-  assert.equal(openPassages(new Set()).length, 0);
-});
 
 /* ---------- pronunciation ---------- */
 

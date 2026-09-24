@@ -61,11 +61,15 @@ describe('booting', { skip: browserSkip ?? false, concurrency: 1 }, () => {
   test('a save from the single-file version is not walked back through finished lessons', async () => {
     const page = await app.page({
       words: Object.fromEntries([0,1,2,3,4].map(id =>
-        [id, { box:2, right:2, wrong:0, seen:2, next: daysAgo(1), lastSeen:'2024-01-01' }]))
+        [id, { box:2, right:2, wrong:0, seen:2, next: daysAgo(1), lastSeen:'2024-01-01' }])),
+      streak: 3, last: '2024-01-01'          // kept by that version, read by nothing now
     });
     await page.waitForSelector('.gauge');
-    assert.equal((await savedProgress(page)).lesson['1'], 'done',
+    const saved = await savedProgress(page);
+    assert.equal(saved.lesson['1'], 'done',
       'lesson 1\'s five words are all open, so the lesson is finished');
+    assert.ok(!('streak' in saved) && !('last' in saved),
+      'keys nothing reads are written out of the save, not carried forever');
     await page.close_();
   });
 

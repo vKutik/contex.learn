@@ -80,6 +80,9 @@ const surfaceLike = (word, shape) => realForm(word, shape) || inflect(word.word,
 const sameClass = (word, allWords) =>
   allWords.filter(w => w.pos === word.pos && w.id !== word.id);
 
+/* The focus mechanics answer yes or no, in this order - it is never shuffled. */
+const YES_NO = ['Yes, it fits', 'No, it does not'];
+
 /* ---------- 1. Context gap fill ---------- */
 /** A sentence with the word cut out of it; the pills are all in the same
  *  grammatical form so only the context tells you which one belongs.
@@ -94,10 +97,9 @@ export function gapQuestion(word, allWords, avoid){
 
   // words that really are attested in this shape come first, so the pills
   // are three genuine English forms rather than three built by rule
-  const pool = sameClass(word, allWords);
-  const attested = shuffle(pool.filter(w => realForm(w, shape)));
-  const rest     = shuffle(pool.filter(w => !realForm(w, shape)));
-  const others = [...attested, ...rest]
+  const attested = [], rest = [];
+  for(const w of sameClass(word, allWords)) (realForm(w, shape) ? attested : rest).push(w);
+  const others = [...shuffle(attested), ...shuffle(rest)]
     .map(w => matchCase(surfaceLike(w, shape), answer))
     .filter(t => t.toLowerCase() !== answer.toLowerCase())
     .slice(0, 3);
@@ -152,7 +154,7 @@ function focusQuestion(word, allWords){
     wordId: word.id,
     prompt: markedOf(example),
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> — ${word.definition}`
@@ -174,7 +176,7 @@ export function passageFocusQuestion(word, passage){
     wordId: word.id,
     prompt: passage.text,
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> here means: ${passage.sense}`
@@ -216,6 +218,10 @@ export function runQuiz(container, questions, handlers){
   let i = 0, score = 0, firstDraw = true;
 
   function draw(){
+    // the learner left mid-quiz (the back chevron): a pending auto-advance
+    // must not finish a quiz nobody is looking at - saving its result and
+    // painting its score over whichever screen they went to
+    if(!container.isConnected) return;
     if(i >= questions.length) return handlers.onDone(score, questions.length);
 
     // lesson comprehension questions arrive without a kind and use `question`
@@ -249,17 +255,15 @@ export function runQuiz(container, questions, handlers){
         btn.classList.add('is-right');
         score++;
       } else {
-        // no red anywhere: the miss just steps back, the answer steps forward
-        btn.classList.add('is-dim');
-        buttons[opts.findIndex(o => o.ok)].classList.add('is-reveal');
-        buttons.forEach(b => { if(!b.className.match(/is-(right|reveal|dim)/)) b.classList.add('is-dim'); });
+        // no red anywhere: every miss steps back, the answer steps forward
+        buttons.forEach((b, k) => b.classList.add(opts[k].ok ? 'is-reveal' : 'is-dim'));
       }
 
       const note = container.querySelector('.explain');
       note.innerHTML = q.explain || '';
       note.hidden = !q.explain;
 
-      handlers.onAnswer && handlers.onAnswer(q, chosen.ok);
+      handlers.onAnswer?.(q, chosen.ok);
 
       // auto-advance, or sooner if they tap anywhere once they have read it
       const next = () => { container.onclick = null; clearTimeout(timer); i++; draw(); };

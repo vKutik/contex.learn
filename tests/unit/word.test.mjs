@@ -84,3 +84,15 @@ test('every real example in the word list round-trips through all three helpers'
     }
   }
 });
+
+test('a new word shows its plain scene, before the example; a familiar one does not', () => {
+  const abstract = { ...WORD, plain:'The water only came up to our knees.' };
+  const first = wordFace(abstract, null, true);
+  assert.ok(first.includes(abstract.plain));
+  assert.ok(first.indexOf('class="plain"') < first.indexOf('class="ex"'),
+    'the picture comes before the sentence it retells');
+  assert.ok(!wordFace(abstract, null, false).includes('class="plain"'));
+  assert.ok(!wordFace(abstract).includes('class="plain"'), 'isNew defaults to false');
+  assert.ok(!wordFace(WORD, null, true).includes('class="plain"'),
+    'a word without a plain field gets no empty block');
+});

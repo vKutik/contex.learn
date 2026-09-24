@@ -1,5 +1,7 @@
 /* progress.js - the round progress gauge and the small legend under it.
  * Pure rendering: hand it the four counts, it returns markup. */
+import { STEP_NAME } from '../srs.js';
+import { plural } from '../util.js';
 
 const ARC = 282.74;   // length of the 90px semicircle drawn below
 
@@ -46,9 +48,8 @@ export function progressRing(c){
     </svg>
   </div>
   <div class="key">
-    <span><i class="dot known"></i>Learned <b>${c.known}</b></span>
-    <span><i class="dot read"></i>Seen <b>${c.read}</b></span>
-    <span><i class="dot started"></i>Started <b>${c.started}</b></span>
+    ${['known','read','started'].map(step =>
+      `<span><i class="dot ${step}"></i>${STEP_NAME[step]} <b>${c[step]}</b></span>`).join('')}
   </div>
   ${todayLine(c.today)}`;
 }
@@ -59,8 +60,7 @@ export function progressRing(c){
    now". Nothing shows on a day with no work: an empty line is not progress. */
 function todayLine(t){
   if(!t || !(t.right || t.wrong)) return '';
-  const n = t.right + t.wrong;
-  return `<div class="today">${n} answer${n === 1 ? '' : 's'} today
+  return `<div class="today">${plural(t.right + t.wrong, 'answer')} today
     · <b>${t.right}</b> right</div>`;
 }
 

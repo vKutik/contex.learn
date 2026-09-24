@@ -260,6 +260,17 @@ test('readingDue lists overdue words first', async () => {
   assert.deepEqual(srs.readingDue(), [1,0], 'most overdue first, nothing that is not due');
 });
 
+test('readingOrder lists every planned word, closest to its turn first', async () => {
+  // what "Another word" walks when reading ahead: with nothing overdue, every
+  // word used to tie at zero days late and the walk bounced between two
+  for(const id of [0,1,2,3]) await seedWord(id);
+  await store.setReadingPlan(0, { step:2, next: dateIn(9) });
+  await store.setReadingPlan(1, { step:1, next: dateIn(2) });
+  await store.setReadingPlan(2, { step:0, next: daysAgo(3) });
+  await store.setReadingPlan(3, { step:1, next: dateIn(2) });
+  assert.deepEqual(srs.readingOrder(), [2,1,3,0], 'overdue, then soonest; ties by id');
+});
+
 test('nextReadingIn is the shortest wait, and null when something is already due', async () => {
   await seedWord(0); await seedWord(1);
   await store.setReadingPlan(0, { step:0, next: dateIn(9) });

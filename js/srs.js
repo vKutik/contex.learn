@@ -4,19 +4,18 @@
  */
 import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET } from './data.js';
 import * as store from './storage.js';
+import { dayKey } from './util.js';
 
 /** Review intervals in days. The spacing is the part that does the work. */
 const STEPS = [1, 3, 7, 16, 35, 90];
+/** The box whose interval is counted in months: a word here is known. */
+const KNOWN_BOX = 4;
 const DAY = 864e5;
 
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => dayKey();
+/** Whole days from one YYYY-MM-DD to another; both parse as UTC midnight,
+ *  so the difference is exact whatever the learner's time zone. */
 const daysBetween = (a,b) => Math.round((new Date(b) - new Date(a)) / DAY);
-
-/** A date n days from today, as the YYYY-MM-DD both schedules store. */
-const addDays = n => {
-  const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0,10);
-};
 
 /* ---------- the four steps a word moves through ----------
  *   new     never opened                       grey
@@ -30,7 +29,7 @@ export const STEP_NAME = { started:'Started', read:'Seen', known:'Learned' };
 export function stepOf(id){
   const s = store.getWord(id);
   if(!s) return 'new';
-  if(s.box >= 4) return 'known';
+  if(s.box >= KNOWN_BOX) return 'known';
   return store.isReadProven(id) ? 'read' : 'started';
 }
 
@@ -113,7 +112,7 @@ export function hhmm(ms){
 export function introduce(id){
   const s = store.getWord(id) || { box:0, right:0, wrong:0, seen:0 };
   if(!s.new) s.new = Date.now();
-  s.next = addDays(STEPS[0]);
+  s.next = dayKey(STEPS[0]);
   s.lastSeen = today();
   // the lesson was the first meeting; the first text is offered straight away,
   // and only then do the intervals start growing
@@ -127,7 +126,7 @@ export function grade(id, g){
   s.seen++;
   if(g === 0){ s.wrong++; s.box = 0; }                 // forgot: back to day one
   else { s.right++; s.box = Math.min(STEPS.length-1, s.box + (g === 1 ? 0 : g === 2 ? 1 : 2)); }
-  s.next = addDays(STEPS[s.box]);
+  s.next = dayKey(STEPS[s.box]);
   s.lastSeen = today();
   store.logAnswer(g > 0);
   return store.putWord(id, s);
@@ -143,17 +142,21 @@ export function grade(id, g){
  */
 const READ_STEPS = [1, 3, 7, 16, 35, 90, 180];
 
-/** Words whose next text is due today or overdue, most overdue first. */
-export function readingDue(){
-  const t = today();
+/** Every open word with a reading plan, in the order the schedule wants
+ *  them: the most overdue first, then whichever is closest to its turn.
+ *  YYYY-MM-DD sorts as text, so no date needs parsing to compare. */
+export function readingOrder(){
+  const next = id => store.readingPlan(id).next;
   return [...introducedIds()]
-    .filter(id => {
-      const plan = store.readingPlan(id);
-      return plan && daysBetween(plan.next, t) >= 0;
-    })
-    .sort((a,b) => daysBetween(store.readingPlan(b).next, t)
-                 - daysBetween(store.readingPlan(a).next, t));
+    .filter(id => store.readingPlan(id))
+    .sort((a,b) => next(a) < next(b) ? -1 : next(a) > next(b) ? 1 : a - b);
 }
+
+/** Words whose next text is due today or overdue, most overdue first. */
+export const readingDue = () => {
+  const t = today();
+  return readingOrder().filter(id => store.readingPlan(id).next <= t);
+};
 
 /** How long until the next word is due a text, in days; null if none waiting. */
 export function nextReadingIn(){
@@ -170,7 +173,7 @@ export function nextReadingIn(){
 export function gradeReading(id, ok){
   const plan = store.readingPlan(id) || { step:0, next: today() };
   const step = ok ? Math.min(READ_STEPS.length - 1, plan.step + 1) : 0;
-  return store.setReadingPlan(id, { step, next: addDays(READ_STEPS[step]) });
+  return store.setReadingPlan(id, { step, next: dayKey(READ_STEPS[step]) });
 }
 
 /** Days a word is overdue for its next text, 0 when it is not. */
@@ -197,7 +200,7 @@ export function familiarity(id, textsRead = 0){
 
   let level = textsRead > 0 ? 1 : 0;
   if(store.isReadProven(id)) level = 2;
-  if(w.box >= 4 && store.isReadProven(id)) level = 3;
+  if(w.box >= KNOWN_BOX && store.isReadProven(id)) level = 3;
 
   const plan = store.readingPlan(id);
   const slack = plan ? READ_STEPS[plan.step] : 1;

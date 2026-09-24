@@ -117,6 +117,23 @@ describe('the quiz runner', { skip: browserSkip ?? false, concurrency: 1 }, () =
     assert.deepEqual(await page.evaluate(() => window.done), { score:1, total:2 });
   });
 
+  test('leaving mid-feedback does not finish the quiz behind the learner\'s back', async () => {
+    // the back chevron swaps the screen while the answer is still showing;
+    // the pending auto-advance must not report a score nobody saw, or the
+    // screen that owns it would save the result and paint over wherever the
+    // learner went
+    await mount([GAP]);
+    await page.waitForSelector('[data-k]');
+    await clickText('shallow');
+    await page.waitForSelector('.is-right');
+    await page.evaluate(() => {
+      const old = document.querySelector('#stage');
+      old.replaceWith(old.cloneNode(false));             // what go() does to it
+    });
+    await page.waitForTimeout(1300);                       // past the auto-advance
+    assert.equal(await page.evaluate(() => window.done), null);
+  });
+
   test('yes and no keep their order; a row of pills does not', async () => {
     for(let run = 0; run < 4; run++){
       await mount([FOCUS]);
