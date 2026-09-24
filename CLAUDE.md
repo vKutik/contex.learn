@@ -26,7 +26,9 @@ schedule never buries a learner in the reviews it handed out itself.
    example — sits under the definition, so an abstract word gets a picture.
 2. **Recall** — five gap fills, one per word, before the story. This is a
    retrieval attempt, and it deliberately avoids the sentence the card just
-   showed.
+   showed. Each answer counts on the word (`seen`, `right`/`wrong`) without
+   moving its box or date; a word missed here climbs to box 1 at most on its
+   first review.
 3. **Reading** — one short text using all five words. Tapping a highlighted
    word opens a tooltip with its transcription, a speaker button and its
    meaning; the text does not move.

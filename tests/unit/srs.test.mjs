@@ -270,6 +270,34 @@ test('normal promotion resumes in the next sitting', async () => {
   assert.equal(store.getWord(0).box, 3);
 });
 
+/* ---------- the lesson's recall step ---------- */
+
+test('a recall answer is counted on the word but moves neither its box nor its date', async () => {
+  await srs.introduce(75);
+  await srs.recallAnswer(75, false);
+  let w = store.getWord(75);
+  assert.deepEqual([w.seen, w.right, w.wrong, w.box, w.next], [1, 0, 1, 0, dateIn(1)]);
+  assert.deepEqual(store.todayLog(), { right:0, wrong:1 });
+  await srs.introduce(77);
+  await srs.recallAnswer(77, true);
+  w = store.getWord(77);
+  assert.deepEqual([w.seen, w.right, w.wrong, w.box], [1, 1, 0, 0]);
+});
+
+test('a word missed in recall climbs to box 1 at most on its first review', async () => {
+  await srs.introduce(0);
+  await srs.recallAnswer(0, false);
+  await srs.grade(0, 3);
+  assert.equal(store.getWord(0).box, 1, 'Easy after a recall miss is box 1');
+  await srs.grade(0, 3);
+  assert.equal(store.getWord(0).box, 3, 'from there it climbs normally');
+
+  await srs.introduce(1);
+  await srs.recallAnswer(1, true);
+  await srs.grade(1, 3);
+  assert.equal(store.getWord(1).box, 2, 'a word recalled right is not held back');
+});
+
 /* ---------- the reading ladder ---------- */
 
 test('answering from the text widens the gap, missing it goes back to day one', async () => {

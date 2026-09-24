@@ -187,7 +187,8 @@ function lessonRecall(lesson, ws){
   runQuiz(stageEl(), questions, {
     onAnswer: (q, ok, outcome, how) => {
       answered('recall', q, outcome, how, { l: lesson.id });
-      if(outcome !== 'synonym') store.logAnswer(ok);
+      // a synonym is a good word, not the word: neither right nor wrong
+      if(outcome !== 'synonym') srs.recallAnswer(q.wordId, ok);
     },
     onDone: async () => {
       await store.setLessonStage(lesson.id,'reading');

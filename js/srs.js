@@ -10,7 +10,8 @@ import { dayKey } from './util.js';
 const STEPS = [1, 3, 7, 16, 35, 90];
 /** The box whose interval is counted in months: a word here is known. */
 const KNOWN_BOX = 4;
-/** The highest box a word forgotten earlier in the same sitting can reach. */
+/** The highest box a word can reach on a success that follows a miss - in
+ *  the same sitting, or with no right answer ever to set against it. */
 const RELEARN_BOX = 1;
 const DAY = 864e5;
 
@@ -146,6 +147,10 @@ export function reviewContext(id){
  *    the sitting shows it again - and a success lifts the word to box 1 at
  *    most, since remembering it forty seconds after being shown it proves
  *    nothing about next week. Normal promotion resumes in the next sitting.
+ *  - a word that has been missed and never yet answered right - a miss in
+ *    the lesson's recall counts - climbs at most to box 1 on its first
+ *    success: its first review is where it is learned, not where it is
+ *    confirmed.
  *
  * grade: 0 forgot, 1 hard, 2 good, 3 easy.
  */
@@ -157,7 +162,7 @@ function applyGrade(rec, g, { repeat = false } = {}){
     s.box = 0;                                         // forgot: back to day one
     if(!repeat){ s.wrong++; tally = false; }
   } else {
-    const cap = repeat ? RELEARN_BOX : STEPS.length - 1;
+    const cap = repeat || (s.right === 0 && s.wrong > 0) ? RELEARN_BOX : STEPS.length - 1;
     const up = g === 1 ? 0 : g === 2 ? 1 : 2;
     s.box = Math.min(s.box + up, Math.max(s.box, cap));
     if(!repeat){ s.right++; tally = true; }
@@ -170,6 +175,20 @@ export function grade(id, g, opts){
   const { rec, tally } = applyGrade(store.getWord(id), g, opts);
   if(tally !== null) store.logAnswer(tally);
   return store.putWord(id, rec);
+}
+
+/** An answer in a lesson's recall step: the first attempt at the word from
+ *  memory. It counts - seen, right or wrong, today's tally - so the word's
+ *  record says what happened, but it moves neither the box nor the date: the
+ *  first review is still tomorrow, and a miss here caps what that review can
+ *  promote it to (see applyGrade). */
+export function recallAnswer(id, ok){
+  const s = store.getWord(id);
+  if(!s) return store.logAnswer(ok);
+  s.seen++;
+  ok ? s.right++ : s.wrong++;
+  store.logAnswer(ok);
+  return store.putWord(id, s);
 }
 
 /* ================= reading on a growing interval =================

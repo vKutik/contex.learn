@@ -161,7 +161,14 @@ describe('a lesson end to end', { skip: browserSkip ?? false, concurrency: 1 }, 
     for(const id of ['0','1','2','3','4']){
       assert.ok(saved.rsched[id], `word ${id} was never given a reading plan`);
       assert.equal(saved.words[id].box, 0, 'the lesson introduces a word, it does not grade it');
+      assert.equal(saved.words[id].seen, 1, `word ${id}: its recall answer never reached the word`);
+      assert.equal(saved.words[id].right + saved.words[id].wrong, 1);
     }
+    // the word record and the cloze card's counters tell the same story
+    const cardMisses = Object.entries(saved.clozeStats)
+      .filter(([id]) => +id.split(':')[0] <= 4).reduce((n, [, c]) => n + c.wrong, 0);
+    const wordMisses = ['0','1','2','3','4'].reduce((n, id) => n + saved.words[id].wrong, 0);
+    assert.ok(wordMisses <= cardMisses, 'a recall miss is on the word as well as on its card');
     const log = Object.values(saved.log)[0];
     assert.equal(log.right + log.wrong, 8, 'five recall answers and three quiz answers');
     assert.deepEqual(page.errors, []);
