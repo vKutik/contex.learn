@@ -84,6 +84,8 @@ version.txt                the deployed build id (see "Deploying")
 tools_stamp.py             writes the build id into js/build.js + version.txt
 cloze_all.json             the cloze cards, source of truth: 100 words x 5
 tools_cloze.py             validates it and writes js/data/cloze.js
+passages_audit.json        a judged score for every passage, tied to its text by hash
+tools_passages.py          the passage quality report and bar (see "Passage quality")
 .nojekyll                  REQUIRED — see "Deploying"
 audio/                     100 pronunciation recordings, one per word
 tests/                     the deploy gate; not served, not part of the app
@@ -145,7 +147,7 @@ cloze    { id: 'wordId:n', s, a, t, alt[], why{} }        // cloze.js[wordId][n]
   word's shelf; `also` lists other course words it happens to contain.
 - `passage.sense` is set only when this passage's own word is used in a
   sense the card doesn't teach; the tooltip and the reading check show it
-  instead of the card's definition. See "Known open problem — polysemy".
+  instead of the card's definition. See "Passage quality".
 
 ### Persisted state (`localStorage`, key `vocab-progress`)
 
@@ -231,7 +233,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 251 tests, about 20 seconds
+node tests/run.mjs            # 257 tests, about 25 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract
@@ -260,28 +262,42 @@ still the difference between fixing one and re-discovering it.
 
 ---
 
-## Known open problem — polysemy
+## Passage quality
 
-The corpus is 932 extracts mined from 101 public-domain books, filtered by
-rule, plus 68 written for the course. The
-filters cannot read, and the measured result is that **roughly 40% of
-passages use their word in a sense the card does not teach**. Read samples,
-not summaries:
+The corpus began as 932 extracts mined from 101 public-domain books, filtered
+by rule, plus 68 written for the course. The filters could not read, and
+reading them showed that roughly 40% used their word in a sense the card does
+not teach (`stretch`: 0 of 10 — all "stretched out his legs"; `bolt`: door
+bolts; `crack`: a gap to peep through), and many more were fragments cut off
+at "Mr.", Victorian dialect, or a word the text gave no way to work out.
 
-| word | the card teaches | passages that show it |
-|---|---|---|
-| `stretch` | become longer by pulling | **0 of 10** — all are "stretched out his legs" |
-| `bolt` | a metal pin | **1 of 10** — six are door bolts, three the verb |
-| `crack` | a thin line where something is broken | 3 of 10 — seven are a gap to peep through |
-| `shift` | a period of work | 3 of 10 — five are the verb, one a garment |
+Every passage has now been read and scored 0–2 on four questions, recorded in
+`passages_audit.json` next to a hash of the exact text:
 
-Three separate problems are tangled here: the wrong part of speech (which
-is mechanically checkable and was never checked), an adjacent sense, and a
-different sense. A fourth, and probably the worst: for some words **the
-definition on the card is not the sense the language actually uses**.
+| | question | 2 | 1 | 0 |
+|---|---|---|---|---|
+| **S** | is it the card's sense? | the card's sense and part of speech | a common neighbouring sense, labelled with `sense` | another sense, another part of speech |
+| **C** | can the word be worked out from the text? | a consequence, contrast or explanation points at it | the text fits, but would fit other words too | nothing to go on |
+| **R** | can an A2–B1 reader read it? | plain modern English | literary but manageable | archaic, dialect |
+| **A** | does it stand alone? | yes | some unexplained names | starts or stops mid-thought |
 
-Any real fix needs per-passage sense labelling, which rules cannot do — a
-language model reading all 1000 passages at build time can. **Do not ship a
-mechanism that makes the learner do that labelling**; an earlier "this text
-is unclear" button did exactly that and was removed. The direction is the
-owner's decision and is still open.
+The bar: S = 2 (or S = 1 with a `sense` label), nothing below 1, C + R + A ≥
+4, and at least 7 of every shelf's 10 in the card's own sense. Passages below
+it were rewritten, as short everyday scenes whose context gives the meaning
+away, or — where a small cut fixed it — trimmed at a sentence boundary. The
+result is 312 book extracts and 688 written passages; 988 in the card's sense,
+12 in a labelled neighbouring sense, none in a wrong one.
+
+`python3 tools_passages.py` prints the report (`… stretch` shows one shelf),
+and `tests/data/passages.test.mjs` holds the bar in the gate. S cannot be
+computed, so it is a judgement; what can be measured — leftover `_italics_`,
+an excerpt cut off at a title, unbalanced quotes, a 45-word sentence — is
+measured and overrules a generous judgement. **Editing a passage breaks its
+hash and fails the gate until it has been read and scored again**; then
+`python3 tools_passages.py --stamp`. Do not ship a mechanism that makes the
+learner do this judging: an earlier "this text is unclear" button did exactly
+that and was removed.
+
+One problem is still open: for some words the definition on the card is not
+the sense books mostly use (`stretch`, `bolt`, `shift`). The shelves now teach
+the card; whether the cards should change is the owner's decision.

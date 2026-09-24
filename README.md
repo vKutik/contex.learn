@@ -47,6 +47,8 @@ and `version.txt`.
 index.html                 markup only: the screen shell
 cloze_all.json             the cloze cards, source of truth (5 per word)
 tools_cloze.py             turns cloze_all.json into js/data/cloze.js
+passages_audit.json        a judged quality score for every passage
+tools_passages.py          the passage quality report and bar
 styles/
   main.css                 font, palette, page, typography
   components.css           buttons, cards, gauge, quiz options, word rows
@@ -247,30 +249,25 @@ the forgetting curve showing through, as a nudge rather than a penalty.
 
 ### Where the texts come from
 
-932 of the 1000 are real extracts from 101 public-domain books — Dickens,
-Austen, the Brontës, Twain, London, Chopin, Cather, Wharton, Conan Doyle,
-Montgomery, Burnett and others — each shown with its source. The remaining 68
-were written for this course, for words the nineteenth century barely uses
-(`tape`, `leak`, `drill`, `rely`).
+The shelves started as 932 extracts from 101 public-domain books — Dickens,
+Austen, the Brontës, Twain, London, Chopin, Cather, Conan Doyle, Montgomery,
+Burnett and others — mined and filtered by rule, plus 68 written for the
+course. Rules cannot read, and reading every passage showed that about 40%
+used the word in a sense the card does not teach, and many more were
+fragments, dialect or texts that gave no clue to the meaning.
 
-They were mined from the corpus and filtered, not hand-picked one by one, so
-the pipeline does the quality work:
+So every passage has now been read and scored on four questions — the card's
+sense? can the word be worked out from the text? readable at A2–B1? does it
+stand alone? — and everything below the bar was rewritten or trimmed. What is
+left: **312 book extracts**, each shown with its source, and **688 short
+passages written for the course**, everyday scenes in which a consequence, a
+contrast or an explanation gives the word away. 988 of the 1000 use the
+card's sense; the other 12 use a common neighbouring sense and say so in the
+tooltip.
 
-- **Wrong senses are blocked.** A regex has no idea that "attaching
-  significance" is not the `attach` this course teaches, so 53 words carry an
-  explicit list of collocations to reject, plus a rule that a physical word
-  sitting beside a strongly abstract noun is the other sense. Some off-sense
-  uses still get through — roughly one text in ten — which is the honest limit
-  of matching senses without a language model.
-- **Offensive material is dropped.** Period fiction carries slurs; anything
-  matching that list, or reading as a broken fragment, is thrown out.
-- **Readable books are preferred.** Each book is scored for sentence length
-  and vocabulary outside the corpus's common 2,400 words, and passages from
-  the denser books are penalised, so what surfaces leans towards Anne of Green
-  Gables rather than Middlemarch.
-- Passages must start a paragraph, end a sentence, run 35–80 words, name at
-  most three people, and no more than two may come from the same book for the
-  same word.
+`python3 tools_passages.py` prints the report; `passages_audit.json` holds
+each score next to a hash of the text it was given for, and the test suite
+fails if a passage changes without being judged again.
 
 ### What the percentage on the home screen means
 
