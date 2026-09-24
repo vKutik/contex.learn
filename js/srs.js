@@ -2,7 +2,7 @@
  * snapshot and writes back through storage.js, so the same logic can move to
  * a Python service untouched.
  */
-import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET } from './data.js';
+import { DAILY_NEW_LIMIT, NEW_WINDOW_MS, DAILY_BUDGET, cloze } from './data.js';
 import * as store from './storage.js';
 
 /** Review intervals in days. The spacing is the part that does the work. */
@@ -203,4 +203,20 @@ export function familiarity(id, textsRead = 0){
   const slack = plan ? READ_STEPS[plan.step] : 1;
   const cooling = level > 0 && overdueBy(id) > slack;   // well past its turn
   return { level, cooling };
+}
+
+/* ---------- which cloze cards are not doing their job ---------- */
+/** Cloze cards by miss rate, worst first, once each has been shown at least
+ *  `minShown` times. A card many learners miss is too open or too hard, and
+ *  is the one to rewrite in cloze_all.json. */
+export function worstCards(minShown = 3){
+  const stats = store.clozeStats();
+  return Object.keys(stats)
+    .filter(id => stats[id].shown >= minShown)
+    .map(id => {
+      const [wordId, n] = id.split(':').map(Number);
+      return { id, card: (cloze[wordId] || [])[n] || null, ...stats[id],
+               rate: stats[id].wrong / stats[id].shown };
+    })
+    .sort((a, b) => b.rate - a.rate || b.shown - a.shown);
 }

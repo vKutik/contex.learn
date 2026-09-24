@@ -30,6 +30,25 @@ export const blankOf = ex => ex.replace(MARKER, '<u> </u>');
 export const markedOf = (ex, text) =>
   ex.replace(MARKER, (_, m) => `<mark>${text ?? m}</mark>`);
 
+/* ---------- the ____ blank of a cloze card ----------
+   Hand-written cloze cards (js/data/cloze.js) mark their gap with four
+   underscores rather than braces, because the answer is not always the
+   headword: "Her hands ____ as she opened the letter" wants "trembled". */
+const BLANK = '____';
+
+/** A cloze sentence with its gap drawn the way blankOf draws one. */
+export const gapOf = s => s.replace(BLANK, '<u> </u>');
+
+/** A cloze sentence with the answer written back in and highlighted. */
+export const filledOf = (s, answer) => s.replace(BLANK, `<mark>${answer}</mark>`);
+
+/** One sentence as words only - braces, blank, case and punctuation gone -
+ *  so an example and a cloze card can be compared as the same sentence.
+ *  `answer` fills a cloze card's blank first. */
+export const wordsOf = (s, answer = '') =>
+  s.replace(MARKER, '$1').replace(BLANK, answer)
+   .toLowerCase().replace(/[^a-z' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
 /* ---------- the plain-scene hint for abstract words ---------- */
 /** A quiet, wordless retelling of the card's first example - shown once,
  *  the very first time a word is met, so an abstract word (`cheerful`,

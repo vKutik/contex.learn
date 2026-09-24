@@ -12,11 +12,13 @@
  *   lesson: { [lessonId]: 'reading' | 'quiz' | 'done' }
  *   rsched: { [wordId]: { step, next } }  when this word is next due a text
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
+ *   clozeSeen : { [wordId]: [cardId] }  the last five cloze cards met, oldest first
+ *   clozeStats: { [cardId]: { shown, correct, wrong, synonym } }
  */
 const KEY = 'vocab-progress';
 
 const empty = () => ({ words:{}, ex:{}, rw:{}, read:{}, lesson:{}, rsched:{},
-                       log:{}, grants:[], streak:0, last:null });
+                       log:{}, clozeSeen:{}, clozeStats:{}, grants:[], streak:0, last:null });
 
 let state = empty();
 
@@ -54,7 +56,8 @@ const Backend = {
 export async function load(){
   const raw = await Backend.read();
   if(raw){ try { state = { ...empty(), ...JSON.parse(raw) }; } catch(e){} }
-  for(const k of ['words','ex','rw','read','lesson','rsched','log']) if(!state[k]) state[k] = {};
+  // progress saved before a compartment existed simply starts it empty
+  for(const k of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']) if(!state[k]) state[k] = {};
   // texts flagged by the removed "?" button: back on the shelf, and the key
   // written out of the save rather than left behind as inert cruft
   if(state.murky){ delete state.murky; await save(); }
@@ -99,6 +102,29 @@ export const grantsSince = t => state.grants.filter(x => x > t).length;
 /* ---------- when each word is next due a reading ---------- */
 export const readingPlan = wordId => state.rsched[wordId] || null;
 export function setReadingPlan(wordId, plan){ state.rsched[wordId] = plan; return save(); }
+
+/* ---------- cloze cards: which were met, and how they went ----------
+   The seen list is what lets the quiz hand out a different sentence each
+   time; the counters are what shows which cards are too open or too hard
+   (srs.worstCards). Five ids per word is all five cards, so "seen longest
+   ago" is always the first. */
+const CLOZE_MEMORY = 5;
+export const clozeSeen = wordId => state.clozeSeen[wordId] || [];
+export function markClozeSeen(wordId, cardId){
+  const list = clozeSeen(wordId).filter(id => id !== cardId);
+  list.push(cardId);
+  state.clozeSeen[wordId] = list.slice(-CLOZE_MEMORY);
+  return save();
+}
+/** outcome: 'correct' | 'wrong' | 'synonym' - every call is one showing. */
+export function countCloze(cardId, outcome){
+  const c = state.clozeStats[cardId] ||
+    (state.clozeStats[cardId] = { shown:0, correct:0, wrong:0, synonym:0 });
+  c.shown++;
+  if(outcome in c) c[outcome]++;
+  return save();
+}
+export const clozeStats = () => state.clozeStats;
 
 /** Daily right/wrong tally, used by the end-of-session summary. */
 export function logAnswer(right){

@@ -119,7 +119,7 @@ describe('settings', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     for(let tap = 0; tap < 5; tap++) await page.click('#tap');
     await page.waitForSelector('#devDelete');
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('vocab-settings'))),
-      { devMode: true });
+      { devMode: true, typeCloze: false });
     assert.equal((await savedProgress(page)).devMode, undefined,
       'preferences live in their own key, away from progress');
     await page.close_();
