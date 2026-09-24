@@ -49,16 +49,39 @@ export function startTelemetry(where){
   // hidden is the last moment a phone reliably lets a page run. iOS can say
   // "hidden" twice for one trip away, and pagehide may come on top of it, so
   // a leave is logged once and not again until the page has been visible
-  let away = false;
+  let away = false, since = Date.now();
   const leave = () => {
-    if(!away){ away = true; track('leave', { screen: where() }); }
+    if(!away){
+      away = true;
+      const sum = sittingSummary(store.eventLog(), since);
+      if(sum) track('session', sum);
+      track('leave', { screen: where() });
+    }
     store.flushEvents();
   };
+  const back = () => { if(away){ away = false; since = Date.now(); } };
   document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState === 'hidden') leave(); else away = false;
+    if(document.visibilityState === 'hidden') leave(); else back();
   });
   window.addEventListener('pagehide', leave);
-  window.addEventListener('pageshow', () => { away = false; });
+  window.addEventListener('pageshow', back);
+}
+
+/** What one stretch of use came to, from this page's events since `from`:
+ *  cards answered or graded, how many different words, how many words were
+ *  right the first time they came up, and how long it took. Null when
+ *  nothing was answered - a glance at the home screen is not a sitting. */
+function sittingSummary(events, from){
+  const work = events.filter(x => x.s === SESSION && x.t >= from &&
+    (x.e === 'answer' || x.e === 'grade'));
+  if(!work.length) return null;
+  const first = new Map();
+  for(const x of work) if(x.w != null && !first.has(x.w))
+    first.set(x.w, x.e === 'grade' ? x.g > 0 : !!x.ok);
+  const firstRight = [...first.values()].filter(Boolean).length;
+  return { cards: work.length, words: first.size, firstRight,
+           first: first.size ? Math.round(100 * firstRight / first.size) / 100 : null,
+           ms: Date.now() - from };
 }
 
 /* ---------- reading the log back ---------- */

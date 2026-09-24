@@ -207,6 +207,7 @@ build id, event name. Written by `telemetry.js`'s `track()`.
 | `peek` | `w`, and `p` (passage) or `l` (lesson) | tooltip opened |
 | `say` / `audio_fail` | `w` | speaker |
 | `grant`, `reset`, `export` | — | Settings |
+| `session` | `cards, words, firstRight, first` (0–1), `ms` — this stretch of use, since the page was last shown | just before `leave`, when anything was answered |
 | `leave` | `screen` | tab hidden or page hidden — once per trip away |
 | `stale_reload` | `to` | fresh.js |
 | `error` | `msg, at, stack` | uncaught error or rejection, 20 a sitting |

@@ -172,6 +172,33 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('leaving writes a summary of the sitting: cards, words, first-try accuracy, time', async () => {
+    const page = await app.page(progress({ ids:[0,1,2], next: daysAgo(1) }));
+    await page.click('#review');
+    const grades = [0, 2, 2, 2];               // the first word forgotten, then everything right
+    for(const g of grades){
+      await page.waitForSelector('#show');
+      await page.click('#show');
+      await page.waitForSelector(`[data-g="${g}"]`);
+      await page.click(`[data-g="${g}"]`);
+      await Promise.race([page.waitForSelector('#show'), page.waitForSelector('.pagehead h1')]);
+    }
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable:true, get: () => 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const { events } = await savedEvents(page, has('session'));
+    const at = events.findIndex(x => x.e === 'session');
+    assert.equal(events[at + 1].e, 'leave', 'the summary comes just before the leave');
+    const sum = events[at];
+    assert.equal(sum.cards, 4);
+    assert.equal(sum.words, 3);
+    assert.equal(sum.firstRight, 2);
+    assert.equal(sum.first, 0.67);
+    assert.ok(sum.ms > 0);
+    await page.close_();
+  });
+
   test('settings shows the log and exports it, with the progress, as a file', async () => {
     const page = await app.page(progress({ ids:[0,1] }));
     await page.click('#settings');
