@@ -290,7 +290,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 287 tests, about 25 seconds
+node tests/run.mjs            # 309 tests, about 35 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

@@ -115,4 +115,30 @@ describe('booting', { skip: browserSkip ?? false, concurrency: 1 }, () => {
       'a failed version check must be caught - the browser logging the dead request is expected');
     await page.close_();
   });
+  test('a real export\'s progress loads and survives a visit untouched', async () => {
+    // the shape an exported file carries under "progress", as a learner's
+    // device holds it now: every compartment filled, leeches and all
+    const saved = progress({ ids:[0,1,2,3,4,5,6,7,8,9], next: daysAgo(2),
+      lessons:{ 1:'done', 2:'recall' }, proven:[1,3], read:[0, 12],
+      clozeSeen:{ 0:['0:3'], 7:['7:3','7:0'] } });
+    Object.assign(saved.words[4], { right:0, wrong:5, seen:5 });
+    Object.assign(saved.words[6], { box:2, right:3, wrong:1, seen:4 });
+    saved.ex = { 0:1, 4:2 };
+    saved.log = { [daysAgo(1)]: { right:9, wrong:4 } };
+    saved.grants = [Date.now() - 36e5];
+    saved.clozeStats = { '0:3': { shown:2, correct:1, wrong:1, synonym:0 } };
+
+    const page = await app.page(saved);
+    await page.waitForSelector('#list');
+    await page.click('#list');
+    await page.waitForSelector('.list');
+    await page.click('[data-back]');
+    await page.waitForSelector('#settings');
+    await page.click('#settings');
+    await page.waitForSelector('.pagehead');
+    assert.deepEqual(await savedProgress(page), saved, 'nothing was dropped, renamed or reset');
+    assert.deepEqual(page.errors, []);
+    await page.close_();
+  });
+
 });
