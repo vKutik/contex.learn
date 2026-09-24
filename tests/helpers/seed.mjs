@@ -9,10 +9,11 @@
  * by tests/unit/storage.test.mjs, so a drift shows up there and not as a
  * mystery here.
  */
-export const dateIn = n => {
-  const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0,10);
-};
+import { dayKey } from '../../js/util.js';
+
+/* The same local calendar day the app keys every date by - the browser and
+   Node share the machine's time zone. */
+export const dateIn = n => dayKey(n);
 export const daysAgo = n => dateIn(-n);
 export const hoursAgo = n => Date.now() - n * 36e5;
 

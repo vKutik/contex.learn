@@ -83,6 +83,9 @@ const surfaceLike = (word, shape) => realForm(word, shape) || inflect(word.word,
 const sameClass = (word, allWords) =>
   allWords.filter(w => w.pos === word.pos && w.id !== word.id);
 
+/* The focus mechanics answer yes or no, in this order - it is never shuffled. */
+const YES_NO = ['Yes, it fits', 'No, it does not'];
+
 /* ---------- 1. Context gap fill ----------
    The gap comes from a hand-written cloze card (js/data/cloze.js) whenever the
    word has one: five per word, each built so the sentence around the gap
@@ -148,9 +151,9 @@ const sharesRoot = (a, b) => {
  *  are attested in this shape come first, so the pills are genuine English
  *  forms rather than ones built by rule. */
 function pillsFor(pool, shape, answer){
-  const attested = shuffle(pool.filter(w => realForm(w, shape)));
-  const rest     = shuffle(pool.filter(w => !realForm(w, shape)));
-  return [...attested, ...rest]
+  const attested = [], rest = [];
+  for(const w of pool) (realForm(w, shape) ? attested : rest).push(w);
+  return [...shuffle(attested), ...shuffle(rest)]
     .map(w => matchCase(surfaceLike(w, shape), answer))
     .filter(t => t.toLowerCase() !== answer.toLowerCase())
     .slice(0, 3);
@@ -267,7 +270,7 @@ function focusQuestion(word, allWords){
     wordId: word.id,
     prompt: markedOf(example),
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> — ${word.definition}`
@@ -289,7 +292,7 @@ export function passageFocusQuestion(word, passage){
     wordId: word.id,
     prompt: passage.text,
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> here means: ${passage.sense}`
@@ -352,6 +355,10 @@ export function runQuiz(container, questions, handlers){
   let i = 0, score = 0, synonyms = 0, firstDraw = true;
 
   function draw(){
+    // the learner left mid-quiz (the back chevron): a pending auto-advance
+    // must not finish a quiz nobody is looking at - saving its result and
+    // painting its score over whichever screen they went to
+    if(!container.isConnected) return;
     if(i >= questions.length) return handlers.onDone(score, questions.length, { synonyms });
 
     // lesson comprehension questions arrive without a kind and use `question`
@@ -393,7 +400,7 @@ export function runQuiz(container, questions, handlers){
       note.innerHTML = noteFor(q, outcome, said);
       note.hidden = !note.innerHTML;
 
-      handlers.onAnswer && handlers.onAnswer(q, outcome === 'correct', outcome);
+      handlers.onAnswer?.(q, outcome === 'correct', outcome);
 
       // auto-advance, or sooner if they tap anywhere once they have read it
       const next = () => { container.onclick = null; clearTimeout(timer); i++; draw(); };
@@ -429,10 +436,8 @@ export function runQuiz(container, questions, handlers){
       if(chosen.ok){
         btn.classList.add('is-right');
       } else {
-        // no red anywhere: the miss just steps back, the answer steps forward
-        btn.classList.add('is-dim');
-        buttons[opts.findIndex(o => o.ok)].classList.add('is-reveal');
-        buttons.forEach(b => { if(!b.className.match(/is-(right|reveal|dim)/)) b.classList.add('is-dim'); });
+        // no red anywhere: every miss steps back, the answer steps forward
+        buttons.forEach((b, k) => b.classList.add(opts[k].ok ? 'is-reveal' : 'is-dim'));
       }
       settle(chosen.ok ? 'correct' : 'wrong', chosen.text);
     });

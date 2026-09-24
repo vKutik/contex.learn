@@ -1,9 +1,9 @@
 /* review.js - the spaced-repetition screen. Recall first, reveal second,
- * then say how hard it was; srs.js turns that into the next due date. */
+ * then say how hard it was; srs.js turns that into the next due date.
+ * Like the flashcard, it is handed everything it shows about the word's
+ * progress rather than asking the scheduler itself. */
 import { wordFace, wireWordFace, exampleOf, blankOf, gapOf, filledOf } from './word.js';
 import { pickCloze, recordCloze } from './quiz.js';
-import * as srs from '../srs.js';
-import * as store from '../storage.js';
 
 const GRADES = [
   { g:0, label:'Forgot', note:'again soon',       cls:'g0' },
@@ -15,13 +15,14 @@ const GRADES = [
 /**
  * @param {HTMLElement} container
  * @param {object} word
- * @param {{done:number,total:number,revealed:boolean,fam?:object}} pos
+ * @param {{done:number, total:number, revealed:boolean, step:string,
+ *          seen:number, fam?:object}} pos  `step` is the label of the word's
+ *          step, `seen` how many times it has been reviewed
  * @param {{onReveal:Function, onGrade:(g:number)=>void, onRerender:Function}} handlers
  */
 export function renderReview(container, word, pos, handlers){
-  const seen = store.getWord(word.id)?.seen || 0;
   // alternate between "which word is missing" and "what does it mean"
-  const askCloze = seen % 2 === 0;
+  const askCloze = pos.seen % 2 === 0;
   // the same card on both sides of the reveal: nothing is recorded until the
   // grade, so asking twice gives the same answer
   const card = askCloze ? pickCloze(word.id) : null;
@@ -30,7 +31,7 @@ export function renderReview(container, word, pos, handlers){
     container.innerHTML = `
       <div class="top">
         <span class="pill">Done ${pos.done} of ${pos.total}</span>
-        <span class="pill">${srs.STEP_NAME[srs.stepOf(word.id)]}</span>
+        <span class="pill">${pos.step}</span>
       </div>
       <div class="card">
         ${askCloze

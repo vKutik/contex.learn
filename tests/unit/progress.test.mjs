@@ -51,14 +51,20 @@ test('the legend prints all three counts', () => {
   assert.match(html, /Started <b>3<\/b>/);
 });
 
-test('a day with no answers shows no tally - an empty line is not progress', () => {
-  assert.doesNotMatch(progressRing(counts()), /class="today"/);
-  assert.doesNotMatch(progressRing(counts({ today:{ right:0, wrong:0 } })), /class="today"/);
+test('the day tally counts both right and wrong, and knows about the singular', () => {
+  assert.match(progressRing(counts({ today:{ right:1, wrong:0 } })), /1 answer today · <b>1<\/b> right/);
+  assert.match(progressRing(counts({ today:{ right:3, wrong:2 } })), /5 answers today · <b>3<\/b> right/);
 });
 
-test('the day tally counts both right and wrong, and knows about the singular', () => {
-  assert.match(progressRing(counts({ today:{ right:1, wrong:0 } })), /1 answer today\s+· <b>1<\/b> right/);
-  assert.match(progressRing(counts({ today:{ right:3, wrong:2 } })), /5 answers today\s+· <b>3<\/b> right/);
+test('the tally and the daily budget are one line, not the same number twice', () => {
+  const html = progressRing(counts({ today:{ right:3, wrong:2 }, budget:80 }));
+  assert.equal((html.match(/class="today"/g) || []).length, 1);
+  assert.match(html, /5 of 80 answers today · <b>3<\/b> right/);
+  // before any work the budget still says how much room the day has, but
+  // there is no "0 right" to report
+  const idle = progressRing(counts({ today:{ right:0, wrong:0 }, budget:80 }));
+  assert.match(idle, /0 of 80 answers today<\/div>/);
+  assert.doesNotMatch(idle, /right/);
 });
 
 /* ---------- the familiarity dots ---------- */

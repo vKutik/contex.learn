@@ -7,7 +7,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as store from '../../js/storage.js';
-import { fresh, wordRecord, DAY_MS } from '../helpers/fixture.mjs';
+import { fresh, wordRecord, DAY_MS, today } from '../helpers/fixture.mjs';
 
 beforeEach(fresh);
 
@@ -72,7 +72,7 @@ test('the daily tally counts right and wrong under today\'s date', async () => {
   await store.logAnswer(true);
   await store.logAnswer(false);
   assert.deepEqual(store.todayLog(), { right:2, wrong:1 });
-  const key = new Date().toISOString().slice(0,10);
+  const key = today();
   assert.deepEqual(Object.keys(store.snapshot().log), [key]);
 });
 

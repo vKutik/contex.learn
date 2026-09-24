@@ -1,10 +1,10 @@
 /* data.js - the data contract for the whole app.
  *
  * Everything the UI ever reads about words, lessons and passages comes
- * through this module. Today it re-exports static JSON modules; when a
- * Python backend arrives, only the three loaders below change to
+ * through this module. Today it re-exports static JSON modules; the three
+ * async loaders at the bottom are where a backend's
  *   const res = await fetch('/api/daily-lesson');
- * and no screen has to be touched.
+ * would go.
  */
 import { words }    from './data/words.js';
 import { lessons }  from './data/lessons.js';
@@ -40,13 +40,9 @@ export const shelfOf = wordId => SHELVES[wordId] || [];
  *  back to cutting a gap out of the card's own examples. */
 export const clozeFor = wordId => cloze[wordId] || [];
 
-/** Passages the learner can read: a passage opens with its own word alone.
- *  Other course words it happens to contain are marked, not required. */
-export const openPassages = knownIds =>
-  passages.filter(p => knownIds.has(p.w));
-
-/* The async shape a REST backend would use. Screens already call these,
-   so swapping the body for fetch() is the whole migration. */
+/* The async shape a REST backend would use. Nothing calls them yet - the
+   screens read the static exports above - so they are the seam, not the
+   migration: moving to fetch() means routing the screens through these. */
 export async function fetchWords()    { return words; }
 export async function fetchLessons()  { return lessons; }
 export async function fetchPassages() { return passages; }

@@ -82,15 +82,13 @@ test('due() returns words at or past their date and nothing else', async () => {
 /* ---------- the daily budget ---------- */
 
 test('with nothing answered yet, budgetLeft is the whole daily budget', () => {
-  assert.equal(srs.doneToday(), 0);
   assert.equal(srs.budgetLeft(), DAILY_BUDGET);
 });
 
-test('doneToday counts every answer logged today, right and wrong alike', async () => {
+test('the budget counts every answer logged today, right and wrong alike', async () => {
   await store.logAnswer(true);
   await store.logAnswer(true);
   await store.logAnswer(false);
-  assert.equal(srs.doneToday(), 3);
   assert.equal(srs.budgetLeft(), DAILY_BUDGET - 3);
 });
 
@@ -258,6 +256,17 @@ test('readingDue lists overdue words first', async () => {
   await store.setReadingPlan(1, { step:0, next: daysAgo(30) });
   await store.setReadingPlan(2, { step:0, next: dateIn(5) });
   assert.deepEqual(srs.readingDue(), [1,0], 'most overdue first, nothing that is not due');
+});
+
+test('readingOrder lists every planned word, closest to its turn first', async () => {
+  // what "Another word" walks when reading ahead: with nothing overdue, every
+  // word used to tie at zero days late and the walk bounced between two
+  for(const id of [0,1,2,3]) await seedWord(id);
+  await store.setReadingPlan(0, { step:2, next: dateIn(9) });
+  await store.setReadingPlan(1, { step:1, next: dateIn(2) });
+  await store.setReadingPlan(2, { step:0, next: daysAgo(3) });
+  await store.setReadingPlan(3, { step:1, next: dateIn(2) });
+  assert.deepEqual(srs.readingOrder(), [2,1,3,0], 'overdue, then soonest; ties by id');
 });
 
 test('nextReadingIn is the shortest wait, and null when something is already due', async () => {

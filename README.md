@@ -309,8 +309,9 @@ review screen's job alone.
 
 Every word in `js/data/words.js` carries a `translation` field, but it is
 not rendered anywhere right now — hidden in the UI on request, the data
-stays put. To bring it back, drop the `.uk` markup back into
-`flashcard.js`, `review.js`, the word-list row in `app.js`, and pass
+stays put. To bring it back, add a styled line for it to `wordFace()` in
+`word.js` (the card and the review reveal share it), the word-list row in
+`app.js`, and pass
 `translation` into the `showTooltip()` call in `reader.js`; `tooltip.js`
 already renders it when present.
 

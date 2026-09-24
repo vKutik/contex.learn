@@ -110,7 +110,7 @@ js/
   srs.js                   scheduling rules, no DOM
   session.js               one review sitting's rules, no DOM
   settings.js              app preferences, the developer unlock
-  util.js                  shuffle, one
+  util.js                  shuffle, one, dayKey, plural
   fresh.js                 reloads a tab running a replaced build
   build.js                 generated: the build id
   data/
@@ -130,9 +130,6 @@ js/
     motion.js              how a screen arrives
     review.js              the spaced-repetition screen
 ```
-
-`vocab-trainer.html` at the root is the superseded single-file original. It
-is not part of the app and nothing references it.
 
 ### Data contracts
 
@@ -164,7 +161,7 @@ rw     { [wordId]: 1 }        proved correct from inside a passage
 read   { [passageId]: 1 }
 lesson { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
 rsched { [wordId]: { step, next } }   when this word is next due a text
-log    { 'YYYY-MM-DD': { right, wrong } }
+log    { 'YYYY-MM-DD': { right, wrong } }   keyed by the learner's local day
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 clozeSeen  { [wordId]: [cardId] }   last five cloze cards met, oldest first
 clozeStats { [cardId]: { shown, correct, wrong, synonym } }
@@ -184,8 +181,9 @@ clozeStats { [cardId]: { shown, correct, wrong, synonym } }
 3. **JSON-first.** No word, sentence, question or definition is written
    into a view. Everything comes from `js/data/`.
 4. **DRY.** Before adding a helper, check whether it exists: `util.js` for
-   arrays, `word.js` for the `{braces}` marker and the shared card face,
-   `motion.js` for screen transitions, `quiz.js` for question generation.
+   arrays, the learner's calendar day and plurals, `word.js` for the
+   `{braces}` marker and the shared card face, `motion.js` for screen
+   transitions, `quiz.js` for question generation.
    Every export in `js/` is imported by something — keep it that way. The
    three `fetch*` functions in `data.js` are the deliberate exception: they
    are the seam for a future backend.
@@ -241,7 +239,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 251 tests, about 20 seconds
+node tests/run.mjs            # 258 tests, about 20 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract
