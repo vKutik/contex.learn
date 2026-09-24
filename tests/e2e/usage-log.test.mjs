@@ -49,6 +49,21 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a typed recall answer logs what was typed and which cloze card asked it', async () => {
+    const page = await app.page(progress({ ids:[0,1,2,3,4], lessons:{ 1:'recall' } }),
+      { settings:{ typeCloze:true } });
+    await page.click('#lesson');
+    await page.waitForSelector('.typein');
+    await page.fill('.typein', 'zzz-not-a-word');
+    await page.press('.typein', 'Enter');
+    const { events } = await savedEvents(page, has('answer'));
+    const a = events.find(x => x.e === 'answer');
+    assert.deepEqual({ ok: a.ok, out: a.out, pick: a.pick, said: a.said },
+      { ok: false, out: 'wrong', pick: null, said: 'zzz-not-a-word' });
+    assert.match(a.card, /^\d+:\d+$/, 'the cloze card that was asked');
+    await page.close_();
+  });
+
   test('a tooltip lookup in reading practice names the passage it happened in', async () => {
     const page = await app.page(progress({ ids:[0,1,2,3,4], reading: daysAgo(1) }));
     await page.click('#reading');

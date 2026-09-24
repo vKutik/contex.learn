@@ -9,10 +9,11 @@
  * by tests/unit/storage.test.mjs, so a drift shows up there and not as a
  * mystery here.
  */
-export const dateIn = n => {
-  const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0,10);
-};
+import { dayKey } from '../../js/util.js';
+
+/* The same local calendar day the app keys every date by - the browser and
+   Node share the machine's time zone. */
+export const dateIn = n => dayKey(n);
 export const daysAgo = n => dateIn(-n);
 export const hoursAgo = n => Date.now() - n * 36e5;
 
@@ -26,13 +27,15 @@ export const hoursAgo = n => Date.now() - n * 36e5;
  *   proven     ids answered correctly from a passage
  *   read       passage ids already answered
  *   lessons    { [lessonId]: stage }
+ *   clozeSeen  { [wordId]: [cardId] }  cloze cards already met, oldest first
  */
 export function progress({
   ids = [], next = dateIn(1), box = 0, opened = 0,
-  reading = dateIn(0), readingStep = 0, proven = [], read = [], lessons = {}
+  reading = dateIn(0), readingStep = 0, proven = [], read = [], lessons = {},
+  clozeSeen = {}
 } = {}){
   const state = { words:{}, ex:{}, rw:{}, read:{}, lesson:{ ...lessons },
-                  rsched:{}, log:{}, grants:[] };
+                  rsched:{}, log:{}, clozeSeen:{ ...clozeSeen }, clozeStats:{}, grants:[] };
   for(const id of ids){
     state.words[id] = { box, right:0, wrong:0, seen:0,
       new: hoursAgo(opened), next, lastSeen: daysAgo(1) };

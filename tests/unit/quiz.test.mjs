@@ -15,71 +15,65 @@ import assert from 'node:assert/strict';
 import { gapQuestion, questionFor, anyQuestion } from '../../js/components/quiz.js';
 import { surfaceOf } from '../../js/components/word.js';
 import { words } from '../../js/data/words.js';
-import { withRandom } from '../helpers/fixture.mjs';
+import { clozeFor } from '../../js/data.js';
+import * as store from '../../js/storage.js';
+import { withRandom, fresh } from '../helpers/fixture.mjs';
 
 const DRAWS = 5;
 const everyWord = fn => words.forEach(w => { for(let n = 0; n < DRAWS; n++) fn(w, n); });
 
-/* ---------- 1. the gap fill ---------- */
+/* ---------- 1. the gap fill ----------
+   A gap now comes from the word's cloze cards, one card per call until the
+   learner has met them all, so these walk every card of every word: each is
+   asked DRAWS times (the pills are drawn at random) and then marked seen,
+   which is what moves pickCloze on to the next. */
 
-test('every word can produce a gap question with four distinct options', () => {
-  everyWord(w => {
-    const q = gapQuestion(w, words);
-    assert.equal(q.kind, 'gap');
-    assert.equal(q.wordId, w.id);
-    assert.equal(q.options.length, 4, `${w.word}: expected four pills`);
-    const lower = q.options.map(o => o.toLowerCase());
-    assert.equal(new Set(lower).size, 4, `${w.word}: duplicate pills ${q.options}`);
-    assert.ok(q.options.every(o => o && o.trim()), `${w.word}: an empty pill`);
-  });
-});
-
-test('the answer is the option at correctIndex and it is the form the sentence used', () => {
-  everyWord(w => {
-    const q = gapQuestion(w, words);
-    const answer = q.options[q.correctIndex];
-    assert.ok(w.examples.some(ex => surfaceOf(ex) === answer),
-      `${w.word}: "${answer}" is not a form any of its examples uses`);
-  });
-});
-
-test('the prompt shows a gap and never contains the answer', () => {
-  everyWord(w => {
-    const q = gapQuestion(w, words);
-    assert.ok(q.prompt.includes('<u> </u>'), `${w.word}: no gap in the prompt`);
-    const answer = q.options[q.correctIndex];
-    assert.doesNotMatch(q.prompt.toLowerCase(), new RegExp(`\\b${escape(answer.toLowerCase())}\\b`),
-      `${w.word}: the prompt gives the answer away`);
-  });
-});
-
-test('the sentence the learner has just read is avoided when the word has another', () => {
-  for(const w of words.filter(w => w.examples.length > 1)){
-    const avoid = w.examples[0];
-    for(let n = 0; n < 20; n++){
-      const q = gapQuestion(w, words, avoid);
-      assert.notEqual(q.prompt, avoid.replace(/\{(.+?)\}/, '<u> </u>'),
-        `${w.word}: asked back the sentence just shown`);
+async function everyCard(fn){
+  for(const w of words){
+    await fresh();
+    for(let k = 0; k < clozeFor(w.id).length; k++){
+      let q;
+      for(let n = 0; n < DRAWS; n++){ q = gapQuestion(w, words); fn(w, q); }
+      await store.markClozeSeen(w.id, q.cardId);
     }
   }
+}
+
+test('every cloze card can produce a gap question with four distinct options', async () => {
+  await everyCard((w, q) => {
+    assert.equal(q.kind, 'gap');
+    assert.equal(q.wordId, w.id);
+    assert.equal(q.options.length, 4, `${q.cardId}: expected four pills`);
+    const lower = q.options.map(o => o.toLowerCase());
+    assert.equal(new Set(lower).size, 4, `${q.cardId}: duplicate pills ${q.options}`);
+    assert.ok(q.options.every(o => o && o.trim()), `${q.cardId}: an empty pill`);
+  });
 });
 
-test('a word with a single example still produces a question rather than nothing', () => {
-  const lonely = { id:900, word:'shallow', pos:'adj', definition:'not deep',
-                   opposite:'deep', ipa:'x', examples:['A {shallow} pool.'] };
-  const q = gapQuestion(lonely, [...words, lonely], lonely.examples[0]);
-  assert.equal(q.options.length, 4);
-  assert.equal(q.options[q.correctIndex], 'shallow');
+test('the answer is the option at correctIndex and it is the form the card asks for', async () => {
+  await everyCard((w, q) => {
+    const card = clozeFor(w.id).find(c => c.id === q.cardId);
+    assert.ok(card, `${w.word}: the question names no card of this word`);
+    assert.equal(q.options[q.correctIndex], card.a);
+  });
 });
 
-test('an inflected answer is never the only pill with that ending', () => {
+test('the prompt shows a gap and never contains the answer', async () => {
+  await everyCard((w, q) => {
+    assert.ok(q.prompt.includes('<u> </u>'), `${q.cardId}: no gap in the prompt`);
+    const answer = q.options[q.correctIndex];
+    assert.doesNotMatch(q.prompt.toLowerCase(), new RegExp(`\\b${escape(answer.toLowerCase())}\\b`),
+      `${q.cardId}: the prompt gives the answer away`);
+  });
+});
+
+test('an inflected answer is never the only pill with that ending', async () => {
   // the shape of the options must not point at the right one: if the answer
   // is "trembled", three dictionary forms beside it would give it away.
   // Only an answer that is actually inflected can be given away this way -
   // a base form sitting next to "anxious" or "afford" is no cue at all.
   let checked = 0;
-  everyWord(w => {
-    const q = gapQuestion(w, words);
+  await everyCard((w, q) => {
     const answer = q.options[q.correctIndex].toLowerCase();
     if(answer === w.word.toLowerCase()) return;
     const ending = /ing$/.test(answer) ? 'ing' : /ed$/.test(answer) ? 'ed'
@@ -92,6 +86,35 @@ test('an inflected answer is never the only pill with that ending', () => {
     }
   });
   assert.ok(checked > 20, `only ${checked} inflected answers drawn - the check proved little`);
+});
+
+/* ---------- the fallback, for a word with no cloze cards ---------- */
+
+const lonely = { id:900, word:'shallow', pos:'adj', definition:'not deep',
+                 opposite:'deep', ipa:'x', examples:['A {shallow} pool.', 'The {shallow} end.'] };
+
+test('a word with no cloze cards falls back to a gap cut from its examples, without throwing', () => {
+  for(let n = 0; n < 20; n++){
+    const q = gapQuestion(lonely, [...words, lonely]);
+    assert.equal(q.cardId, undefined, 'there is no card to name');
+    assert.equal(q.options.length, 4);
+    assert.ok(lonely.examples.some(ex => surfaceOf(ex) === q.options[q.correctIndex]));
+    assert.ok(q.prompt.includes('<u> </u>'));
+  }
+});
+
+test('the fallback still avoids the sentence the learner has just read', () => {
+  for(let n = 0; n < 20; n++){
+    const q = gapQuestion(lonely, [...words, lonely], lonely.examples[0]);
+    assert.notEqual(q.prompt, lonely.examples[0].replace(/\{(.+?)\}/, '<u> </u>'));
+  }
+});
+
+test('a word with a single example still produces a question rather than nothing', () => {
+  const single = { ...lonely, examples:['A {shallow} pool.'] };
+  const q = gapQuestion(single, [...words, single], single.examples[0]);
+  assert.equal(q.options.length, 4);
+  assert.equal(q.options[q.correctIndex], 'shallow');
 });
 
 /* ---------- 2. the context match ---------- */

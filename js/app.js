@@ -2,7 +2,7 @@
  * components together. Screens decide what to show; they never persist
  * anything themselves (storage.js) and never schedule anything (srs.js).
  */
-import { words, lessons, passages, wordById, lessonWords, openPassages,
+import { words, lessons, passages, wordById, lessonWords,
          shelfOf, DAILY_BUDGET } from './data.js';
 import * as store from './storage.js';
 import * as srs from './srs.js';
@@ -15,13 +15,15 @@ import { pronunciations } from './data/pronunciation.js';
 import { renderReview } from './components/review.js';
 import { initReader, dictOf } from './components/reader.js';
 import { runQuiz, questionFor, anyQuestion, gapQuestion, passageFocusQuestion } from './components/quiz.js';
-import { exampleOf, markedOf } from './components/word.js';
+import { exampleOf, markedOf, gapOf } from './components/word.js';
 import { hideTooltip } from './components/tooltip.js';
 import { paint, easeIn } from './components/motion.js';
-import { shuffle, one } from './util.js';
+import { shuffle, one, plural } from './util.js';
 import { watchForNewBuild } from './fresh.js';
 import { track, startTelemetry, summarize, exportLog } from './telemetry.js';
 const screen = () => document.getElementById('screen');
+/** The part of a screen a component renders into. */
+const stageEl = () => screen().querySelector('#stage');
 const DICT = dictOf(words);
 /* ---------------- router ---------------- */
 const routes = {};
@@ -50,10 +52,15 @@ const backButton = (label = 'Back', to = 'home') =>
   `<button class="go" data-back="${to}">${label}</button>`;
 const wireBack = () => screen().querySelectorAll('[data-back]')
   .forEach(b => b.onclick = () => go(b.dataset.back));
+/** Wire a button on the current screen, if this render drew it. */
+const on = (id, fn) => { const el = screen().querySelector('#' + id); if(el) el.onclick = fn; };
 /** Every quiz answer goes into the usage log the same way: where it was
- *  asked, which mechanic, which word, what was tapped and how fast. */
-const answered = (at, q, ok, how, extra = {}) =>
-  track('answer', { at, k: q.kind, w: q.wordId ?? null, ok, ms: how.ms, pick: how.pick, ...extra });
+ *  asked, which mechanic (and cloze card), which word, the outcome, what was
+ *  tapped or typed and how fast. A synonym is logged too - it is not a miss,
+ *  but a card that keeps drawing one is a card worth reading again. */
+const answered = (at, q, outcome, how, extra = {}) =>
+  track('answer', { at, k: q.kind, w: q.wordId ?? null, ...(q.cardId && { card: q.cardId }),
+    ok: outcome === 'correct', out: outcome, ...how, ...extra });
 /** Both quizzes finish the same way: the score, a line about it, then a way
  *  back into the text. Only the wording and those buttons differ, so the
  *  caller passes them and wires their clicks afterwards. */
@@ -71,49 +78,49 @@ routes.home = () => {
   const batch    = queue.slice(0, session.SESSION_SIZE);
   const carriedOver = dueAll.length - queue.length;
   const wait     = srs.unlockIn();
-  const openIds  = srs.introducedIds();
-  const reading  = openPassages(openIds);
+  const opened   = srs.introducedIds().size;   // every word owns a shelf of texts
   const lesson   = nextLesson();
   const counts = {
     known:   srs.countStep('known'),
     read:    srs.countStep('read'),
     started: srs.countStep('started'),
     total:   words.length,
-    today:   store.todayLog()
+    today:   store.todayLog(),
+    budget:  DAILY_BUDGET
   };
   /* Exactly one filled button, and it is the first thing that can actually
      be done. Nailing "primary" to a fixed button is how a *disabled*
      "New words in 12h" ended up the loudest element on the screen while the
      one thing you could press sat in an outline. */
   const actions = [
-    batch.length && { id:'review', label:`Review ${batch.length} word${batch.length===1?'':'s'}` },
+    batch.length && { id:'review', label:`Review ${plural(batch.length, 'word')}` },
     { id:'lesson',  label: lessonLabel(lesson, wait), off: !lesson },
-    { id:'reading', label:'Reading practice', off: !reading.length },
+    { id:'reading', label:'Reading practice', off: !opened },
     { id:'list',    label:'Word list' }
   ].filter(Boolean);
   const lead = actions.find(a => !a.off);
   screen().innerHTML = progressRing(counts) +
-    `<p class="muted budget">${srs.doneToday()} of ${DAILY_BUDGET} today</p>` +
     (carriedOver > 0 ? `<p class="muted">${carriedOver} more due — waiting for tomorrow's budget.</p>` : '') +
     actions.map(a => `<button class="go${a === lead ? '' : ' ghost'}" id="${a.id}"${
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +
     `<button class="linkbtn" id="settings">Settings</button>`;
-  const on = (id, fn) => { const el = screen().querySelector('#'+id); if(el) el.onclick = fn; };
   on('review',   () => go('review',  { session: session.startSession(shuffle(batch)), revealed:false }));
   on('lesson',   () => lesson && go('lesson', { id: lesson.id, stage: resumeStage(lesson) }));
   on('reading',  () => go('reading'));
   on('list',     () => go('list'));
   on('settings', () => go('settings'));
 };
+/** Every card of this lesson has been opened. */
+const cardsDone = lesson => lesson.wordIds.every(id => store.getWord(id));
+
 /** What to offer next. A lesson whose cards are done but whose reading or
  *  quiz is not always wins, so the daily cap can never strand you halfway.
  *  Otherwise the first lesson with an unopened word, if the cap allows it. */
 function nextLesson(){
-  const unfinished = lessons.find(l =>
-    l.wordIds.every(id => store.getWord(id)) && store.lessonStage(l.id) !== 'done');
+  const unfinished = lessons.find(l => cardsDone(l) && store.lessonStage(l.id) !== 'done');
   if(unfinished) return unfinished;
   if(srs.newQuota() === 0) return null;
-  return lessons.find(l => l.wordIds.some(id => !store.getWord(id))) || null;
+  return lessons.find(l => !cardsDone(l)) || null;
 }
 /** The Learn button's label when there is nothing to resume: a countdown
  *  when the 12h window is what's holding it back, a plain reason when the
@@ -121,13 +128,12 @@ function nextLesson(){
  *  when there is truly nothing left to open. */
 function lessonLabel(lesson, wait){
   if(lesson) return 'Learn';
-  const hasMore = lessons.some(l => l.wordIds.some(id => !store.getWord(id)));
-  if(!hasMore) return 'All words opened';
+  if(lessons.every(cardsDone)) return 'All words opened';
   return wait ? `New words in ${srs.hhmm(wait)}` : 'Reviews come first';
 }
-/** Which of the three stages to drop back into. */
+/** Which of the four stages to drop back into. */
 function resumeStage(lesson){
-  if(lesson.wordIds.some(id => !store.getWord(id))) return 0;
+  if(!cardsDone(lesson)) return 0;
   const at = STAGES.indexOf(store.lessonStage(lesson.id));
   return at < 1 ? 1 : at;          // the cards are done; carry on from there
 }
@@ -148,9 +154,9 @@ function lessonCards(lesson, ws, i){
   const word = ws[i];
   const head = `<h1>${lesson.title}</h1>`;
   screen().innerHTML = head + '<div id="stage"></div>';
-  renderFlashcard(screen().querySelector('#stage'), word,
+  renderFlashcard(stageEl(), word,
     { label:`New word ${i+1} of ${ws.length}`,
-      fam: srs.familiarity(word.id, textsRead(word.id)),
+      fam: famOf(word.id),
       isNew: !store.getWord(word.id),
       next: i === ws.length-1 ? 'Try them from memory' : 'Got it' },
     {
@@ -178,8 +184,11 @@ function lessonRecall(lesson, ws){
     <p class="muted">Before the story: which word belongs in each sentence?
       Answer from memory — a wrong guess teaches more than another read.</p>
     <div id="stage"></div>`;
-  runQuiz(screen().querySelector('#stage'), questions, {
-    onAnswer: (q, ok, how) => { store.logAnswer(ok); answered('recall', q, ok, how, { l: lesson.id }); },
+  runQuiz(stageEl(), questions, {
+    onAnswer: (q, ok, outcome, how) => {
+      answered('recall', q, outcome, how, { l: lesson.id });
+      if(outcome !== 'synonym') store.logAnswer(ok);
+    },
     onDone: async () => {
       await store.setLessonStage(lesson.id,'reading');
       go('lesson',{ id:lesson.id, stage:2 });
@@ -192,11 +201,11 @@ function lessonReading(lesson){
       word if you need its meaning.</p>
     <div class="card" id="stage"></div>
     <button class="go" id="toquiz">Answer the questions</button>`;
-  initReader(screen().querySelector('#stage'), lesson, DICT, famLevel);
-  screen().querySelector('#toquiz').onclick = async () => {
+  initReader(stageEl(), lesson, DICT, famLevel);
+  on('toquiz', async () => {
     await store.setLessonStage(lesson.id,'quiz');
     go('lesson',{ id:lesson.id, stage:3 });
-  };
+  });
   wireBack();
 }
 function lessonQuiz(lesson, ws){
@@ -207,11 +216,12 @@ function lessonQuiz(lesson, ws){
     anyQuestion(one(ws), words)
   ];
   screen().innerHTML = `<h1>${lesson.title}</h1><div id="stage"></div>`;
-  runQuiz(screen().querySelector('#stage'), questions, {
-    onAnswer: (q, ok, how) => {
+  runQuiz(stageEl(), questions, {
+    onAnswer: (q, ok, outcome, how) => {
+      answered('lesson', q, outcome, how, { l: lesson.id });
+      if(outcome === 'synonym') return;          // a good word, not the word: no mark
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok && q.wordId != null) store.markReadCorrect(q.wordId);
-      answered('lesson', q, ok, how, { l: lesson.id });
     },
     onDone: async (score, total) => {
       await store.setLessonStage(lesson.id,'done');
@@ -224,7 +234,7 @@ function lessonQuiz(lesson, ws){
         // fallback - so the filled button must not point backwards
         `<button class="go" data-back="home">Done</button>
          <button class="go ghost" id="again">Read the story again</button>`);
-      screen().querySelector('#again').onclick = () => go('lesson',{ id:lesson.id, stage:2 });
+      on('again', () => go('lesson',{ id:lesson.id, stage:2 }));
     }
   });
 }
@@ -245,22 +255,22 @@ routes.review = params => {
           ? `<div class="row"><span>Back tomorrow</span><b>${backTomorrow.join(', ')}</b></div>`
           : ''}
       </div>
-      ${more.length ? `<button class="go" id="more">Next ${more.length} word${more.length===1?'':'s'}</button>
+      ${more.length ? `<button class="go" id="more">Next ${plural(more.length, 'word')}</button>
          <button class="go ghost" data-back="home">Back</button>`
         : backButton('Back','home')}`;
-    if(more.length) screen().querySelector('#more').onclick = () =>
-      go('review', { session: session.startSession(shuffle(more)), revealed:false });
+    on('more', () => go('review', { session: session.startSession(shuffle(more)), revealed:false }));
     return wireBack();
   }
   const word = wordById(session.current(sess));
   if(!revealed) promptAt = Date.now();
   screen().innerHTML = '<div id="stage"></div>';
-  renderReview(screen().querySelector('#stage'), word,
-    { ...session.progress(sess), revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
+  renderReview(stageEl(), word,
+    { ...session.progress(sess), revealed, fam: famOf(word.id),
+      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0 },
     {
-      onReveal: mode => {
+      onReveal: (mode, card) => {
         revealAt = Date.now();
-        track('reveal', { w: word.id, mode, ms: revealAt - promptAt });
+        track('reveal', { w: word.id, mode, ...(card && { card }), ms: revealAt - promptAt });
         go('review', { ...params, revealed:true });
       },
       onRerender: rerender,
@@ -311,11 +321,11 @@ routes.reading = ({ id = null, word: only = null, after = null, ahead = false } 
     <button class="go" id="quiz">Answer the question</button>
     <button class="go ghost" id="more">Another text for <b>${word.word}</b></button>
     <button class="go ghost" id="another">Another word</button>`;
-  initReader(screen().querySelector('#stage'), passage, DICT, famLevel);
-  screen().querySelector('#quiz').onclick = () => go('readingQuiz', { id: passage.id });
+  initReader(stageEl(), passage, DICT, famLevel);
+  on('quiz', () => go('readingQuiz', { id: passage.id }));
   // more of the same word: the schedule is not consulted and not moved
-  screen().querySelector('#more').onclick = () => go('reading', { word: passage.w, ahead });
-  screen().querySelector('#another').onclick = () => go('reading', { after: passage.w, ahead });
+  on('more', () => go('reading', { word: passage.w, ahead }));
+  on('another', () => go('reading', { after: passage.w, ahead }));
   wireBack();
 };
 /* Nothing is *due* - which is not the same as nothing to read. The schedule
@@ -331,21 +341,23 @@ function readingRested(){
         ? `The schedule brings the next word back ${days === 1 ? 'tomorrow' : `in ${days} days`}.`
         : 'Open some words first and their texts will start arriving here.'}</p>
       ${open.length ? `<p class="muted">Nothing is <em>due</em> - but
-        ${spare} more text${spare === 1 ? '' : 's'} are sitting on the shelves of the
-        words you have already opened. Reading them costs you nothing: extra
-        practice never moves a due date.</p>` : ''}
+        ${plural(spare, 'more text')} ${spare === 1 ? 'is' : 'are'} sitting on the shelves
+        of the words you have already opened. Reading them costs you nothing:
+        extra practice never moves a due date.</p>` : ''}
     </div>
     ${spare ? `<button class="go" id="ahead">Keep reading</button>` : ''}`;
-  const a = screen().querySelector('#ahead');
-  if(a) a.onclick = () => go('reading', { ahead:true });
+  on('ahead', () => go('reading', { ahead:true }));
   wireBack();
 }
-/** How far a word has settled, 0-3 - what decides how loudly a passage
- *  still highlights it. */
-const famLevel = id => srs.familiarity(id, textsRead(id)).level;
-
 /** How many of a word's ten texts have had their question answered. */
 const textsRead = wordId => shelfOf(wordId).filter(p => store.isPassageRead(p.id)).length;
+
+/** The familiarity index for one word, as the dots and the marks show it. */
+const famOf = id => srs.familiarity(id, textsRead(id));
+
+/** How far a word has settled, 0-3 - what decides how loudly a passage
+ *  still highlights it. */
+const famLevel = id => famOf(id).level;
 /* Texts already served in this sitting. A text only counts as *read* once
    its question is answered, so "have you read it" cannot order a browse
    through the shelf - this can. Deliberately not persisted: it orders one
@@ -360,25 +372,20 @@ function pickText(wordId){
   // worked all the way through: start the shelf again rather than stall
   if(left.every(p => shown.has(p.id))) left.forEach(p => shown.delete(p.id));
   const unseen = left.filter(p => !shown.has(p.id));
-  const chosen = one(unseen.filter(p => !store.isPassageRead(p.id)).length
-    ? unseen.filter(p => !store.isPassageRead(p.id))
-    : unseen);
+  const unread = unseen.filter(p => !store.isPassageRead(p.id));
+  const chosen = one(unread.length ? unread : unseen);
   shown.add(chosen.id);
   return chosen;
 }
 /** Which word to read next: the most overdue one, or - when the learner
  *  asked to move on - the one after it in the queue, so "Another word"
- *  walks the whole queue instead of bouncing between its top two. */
+ *  walks the whole queue instead of bouncing between its top two. Reading
+ *  ahead, with nothing due, the queue is every open word, closest to its
+ *  turn first. */
 function nextWord(due, after){
-  if(!due.length) return anyIntroduced(after);
-  if(after === null) return due[0];
-  return due[(due.indexOf(after) + 1) % due.length];
-}
-/** Reading ahead of schedule: whichever word is closest to its turn. */
-function anyIntroduced(skip = null){
-  const ids = [...srs.introducedIds()].filter(id => id !== skip);
-  if(!ids.length) return null;
-  return ids.sort((a,b) => srs.overdueBy(b) - srs.overdueBy(a))[0];
+  const queue = due.length ? due : srs.readingOrder();
+  if(!queue.length) return null;
+  return queue[(queue.indexOf(after) + 1) % queue.length];
 }
 routes.readingQuiz = ({ id }) => {
   const passage = passages[id];
@@ -389,28 +396,30 @@ routes.readingQuiz = ({ id }) => {
   // the check has to be about the sense the text actually showed
   const questions = [passage.sense ? passageFocusQuestion(word, passage) : questionFor(word, words, passage.slot)];
   screen().innerHTML = '<div id="stage"></div>';
-  runQuiz(screen().querySelector('#stage'), questions, {
+  runQuiz(stageEl(), questions, {
     // getting it right from the passage alone is what turns a word amber
-    onAnswer: (q, ok, how) => {
+    onAnswer: (q, ok, outcome, how) => {
       // the rung this text was served on, before gradeReading moves it
-      answered('reading', q, ok, how, { p: passage.id, st: store.readingPlan(passage.w)?.step ?? null });
+      answered('reading', q, outcome, how, { p: passage.id, st: store.readingPlan(passage.w)?.step ?? null });
+      if(outcome === 'synonym') return;          // a good word, not the word: no mark
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok) store.markReadCorrect(q.wordId);
     },
-    onDone: async (score, total) => {
+    onDone: async (score, total, { synonyms }) => {
       await store.markPassageRead(passage.id);
       // right: the next text for this word moves further out. wrong: tomorrow.
-      await srs.gradeReading(passage.w, score === total);
+      // A synonym typed in is neither, so the schedule stays where it was.
+      if(!synonyms) await srs.gradeReading(passage.w, score === total);
       scoreScreen(score, total,
         score === total
           ? 'You read the meaning out of the sentences around it. That is how words are actually learned.'
           : 'Read it once more and look at what happens either side of the word.',
-        `<button class="go" id="more">Another text for <b>${wordById(passage.w).word}</b></button>
+        `<button class="go" id="more">Another text for <b>${word.word}</b></button>
          <button class="go ghost" id="another">Next word</button>
          <button class="go ghost" id="again">Read this one again</button>`);
-      screen().querySelector('#more').onclick = () => go('reading',{ word: passage.w });
-      screen().querySelector('#another').onclick = () => go('reading',{ after: passage.w, ahead:true });
-      screen().querySelector('#again').onclick = () => go('reading',{ id: passage.id });
+      on('more', () => go('reading',{ word: passage.w }));
+      on('another', () => go('reading',{ after: passage.w, ahead:true }));
+      on('again', () => go('reading',{ id: passage.id }));
     }
   });
 };
@@ -425,7 +434,7 @@ routes.list = () => {
     <div class="item">
       <div class="ihead">
         <b>${w.word}</b>
-        ${familiarityDots(srs.familiarity(w.id, textsRead(w.id)))}
+        ${familiarityDots(famOf(w.id))}
         <span class="ipos">/${w.ipa}/ · ${w.pos}</span>
         <button class="say tiny" data-say="${w.id}">🔊</button>
       </div>
@@ -452,26 +461,27 @@ routes.settings = ({ confirming = false, note = '' } = {}) => {
       <p class="muted">Saving to: ${store.storageLabel()}</p>
     </div>
     ${newWordsCard()}
+    ${typingCard()}
     ${usageCard()}
     ${creditsCard()}
     ${settings.isDevMode() ? devCard(confirming) : ''}`;
-  screen().querySelector('#tap').onclick = () => {
+  on('tap', () => {
     if(settings.registerUnlockTap()) go('settings', { note:'Developer mode unlocked.' });
-  };
-  screen().querySelector('#plus5').onclick = async () => {
+  });
+  on('plus5', async () => {
     track('grant');
     await srs.grantMore();
     go('settings', { note:`Five more words opened. ${srs.newQuota()} waiting on the home screen.` });
-  };
-  const del = screen().querySelector('#devDelete');
-  if(del) del.onclick = () => go('settings', { confirming:true });
-  const yes = screen().querySelector('#devYes');
-  if(yes) yes.onclick = async () => { track('reset'); await store.resetAll(); go('home'); };
-  const no = screen().querySelector('#devNo');
-  if(no) no.onclick = () => go('settings');
-  screen().querySelector('#logExport').onclick = () => exportLog();
-  const clear = screen().querySelector('#logClear');
-  if(clear) clear.onclick = () => { store.clearEvents(); go('settings', { note:'Usage log cleared.' }); };
+  });
+  on('typing', () => {
+    settings.setTypesCloze(!settings.typesCloze());
+    go('settings');
+  });
+  on('devDelete', () => go('settings', { confirming:true }));
+  on('devYes', async () => { track('reset'); await store.resetAll(); go('home'); });
+  on('devNo', () => go('settings'));
+  on('logExport', () => exportLog());
+  on('logClear', () => { store.clearEvents(); go('settings', { note:'Usage log cleared.' }); });
   wireBack();
 };
 /* The log is the learner's, so the learner can see that it exists and take
@@ -533,19 +543,30 @@ function newWordsCard(){
     <button class="go ghost" id="plus5">+5 words now</button>
   </div>`;
 }
+/* Typing the word is harder than picking it, and slower on a phone - so it is
+   offered, never the default. A typed synonym the card accepts counts as
+   neither right nor wrong. */
+function typingCard(){
+  const on = settings.typesCloze();
+  return `<div class="card">
+    <h2>Answer by typing</h2>
+    <p class="muted">In gap fills, type the missing word instead of tapping it.
+      A word that also fits the sentence is shown as such and does not count
+      against you.</p>
+    <div class="row"><span>Typing</span><b>${on ? 'on' : 'off'}</b></div>
+    <button class="go ghost" id="typing">${on ? 'Go back to tapping' : 'Type answers instead'}</button>
+  </div>`;
+}
 /* The recordings are other people's work under licences that ask for a
    credit, so the credit is in the app, not only in the README. */
 function creditsCard(){
+  const recordings = Object.values(pronunciations);
   const by = {};
-  for(const id in pronunciations){
-    const p = pronunciations[id];
-    (by[p.by] = by[p.by] || { n:0, lic:new Set() }).n++;
-    by[p.by].lic.add(p.lic);
-  }
-  const voices = Object.entries(by).sort((a,b) => b[1].n - a[1].n)
-    .map(([name, v]) => `<div class="row"><span>${name || 'uncredited'}</span>
-        <b>${v.n}</b></div>`).join('');
-  const licences = [...new Set(Object.values(pronunciations).map(p => p.lic))].join(', ');
+  for(const p of recordings) by[p.by] = (by[p.by] || 0) + 1;
+  const voices = Object.entries(by).sort((a,b) => b[1] - a[1])
+    .map(([name, n]) => `<div class="row"><span>${name || 'uncredited'}</span>
+        <b>${n}</b></div>`).join('');
+  const licences = [...new Set(recordings.map(p => p.lic))].join(', ');
   return `<div class="card">
     <h2>Pronunciations</h2>
     <p class="muted">Spoken by volunteers and published on
@@ -554,8 +575,24 @@ function creditsCard(){
     ${voices}
   </div>`;
 }
+/* The cards learners miss most, so the ones too open or too hard to answer
+   can be rewritten in cloze_all.json. Only counts from this device. */
+function worstCardsList(){
+  const worst = srs.worstCards().slice(0, 10);
+  if(!worst.length) return '<p class="muted">No cloze card has been shown three times yet.</p>';
+  return `<div class="list">${worst.map(c => `
+    <div class="item">
+      <div class="ihead"><b>${Math.round(c.rate * 100)}% missed</b>
+        <span class="ipos">${c.id} · shown ${c.shown}${c.synonym ? ` · ${c.synonym} synonym` : ''}</span></div>
+      ${c.card ? `<div class="ex">${gapOf(c.card.s)} <i>${c.card.a}</i></div>` : ''}
+    </div>`).join('')}</div>`;
+}
 function devCard(confirming){
   return `
+    <div class="card">
+      <h2>Hardest cloze cards</h2>
+      ${worstCardsList()}
+    </div>
     <div class="card">
       <h2>Developer</h2>
       <p class="muted">Not part of the normal flow. Deletes every word, lesson and daily
@@ -577,11 +614,9 @@ function devCard(confirming){
    Treat any lesson whose words are all introduced as finished, so an existing
    learner is not walked back through lessons they have already done. */
 function migrateLessonStages(){
-  if(Object.keys(store.snapshot().lesson).length) return;
-  if(!Object.keys(store.snapshot().words).length) return;
-  for(const l of lessons){
-    if(l.wordIds.every(id => store.getWord(id))) store.setLessonStage(l.id,'done');
-  }
+  const { lesson, words: opened } = store.snapshot();
+  if(Object.keys(lesson).length || !Object.keys(opened).length) return;
+  for(const l of lessons) if(cardsDone(l)) store.setLessonStage(l.id,'done');
 }
 await store.load();
 migrateLessonStages();

@@ -9,18 +9,24 @@
  *   ex    : { [wordId]: index of the example last shown }
  *   rw    : { [wordId]: 1 }   answered correctly inside a passage
  *   read  : { [passageId]: 1 }
- *   lesson: { [lessonId]: 'reading' | 'quiz' | 'done' }
+ *   lesson: { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
  *   rsched: { [wordId]: { step, next } }  when this word is next due a text
+ *   log   : { 'YYYY-MM-DD': { right, wrong } }  answers per local day
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
+ *   clozeSeen : { [wordId]: [cardId] }  the last five cloze cards met, oldest first
+ *   clozeStats: { [cardId]: { shown, correct, wrong, synonym } }
  *
  * The usage log sits beside it under its own key (see the bottom of this
  * file): it grows with every tap, and re-serialising it on every progress
  * save would make the one write that matters pay for the one that doesn't.
  */
+import { dayKey } from './util.js';
+
 const KEY = 'vocab-progress';
 
-const empty = () => ({ words:{}, ex:{}, rw:{}, read:{}, lesson:{}, rsched:{},
-                       log:{}, grants:[], streak:0, last:null });
+/** The compartments that are maps; `grants` is the one list. */
+const MAPS = ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats'];
+const empty = () => ({ ...Object.fromEntries(MAPS.map(k => [k, {}])), grants:[] });
 
 let state = empty();
 
@@ -58,11 +64,14 @@ const Backend = {
 export async function load(){
   const raw = await Backend.read();
   if(raw){ try { state = { ...empty(), ...JSON.parse(raw) }; } catch(e){} }
-  for(const k of ['words','ex','rw','read','lesson','rsched','log']) if(!state[k]) state[k] = {};
-  // texts flagged by the removed "?" button: back on the shelf, and the key
-  // written out of the save rather than left behind as inert cruft
-  if(state.murky){ delete state.murky; await save(); }
+  // progress saved before a compartment existed simply starts it empty
+  for(const k of MAPS) if(!state[k]) state[k] = {};
   if(!Array.isArray(state.grants)) state.grants = [];   // progress saved before grants existed
+  // keys nothing reads any more - texts flagged by the removed "?" button, and
+  // a streak the single-file version kept - are written out of the save
+  // rather than left behind as inert cruft
+  const stale = ['murky','streak','last'].filter(k => k in state);
+  if(stale.length){ stale.forEach(k => delete state[k]); await save(); }
   // progress saved before the daily cap existed has no `new` stamp
   for(const id of Object.keys(state.words)){
     const s = state.words[id];
@@ -96,8 +105,8 @@ export const lessonStage = lessonId => state.lesson[lessonId] || null;
 /* ---------- extra new words the learner asked for ----------
    The five-a-day cap is the pace the review intervals are built around, so
    it is never raised permanently. A grant is one timestamp worth one extra
-   batch, and it ages out of the rolling 24 hours exactly like an opened
-   word does - so tomorrow starts at five again, by itself. */
+   batch, and it ages out of the rolling 12 hours exactly like an opened
+   word does - so the next window starts at five again, by itself. */
 export function grantNewWords(){ state.grants.push(Date.now()); return save(); }
 export const grantsSince = t => state.grants.filter(x => x > t).length;
 
@@ -105,14 +114,37 @@ export const grantsSince = t => state.grants.filter(x => x > t).length;
 export const readingPlan = wordId => state.rsched[wordId] || null;
 export function setReadingPlan(wordId, plan){ state.rsched[wordId] = plan; return save(); }
 
-/** Daily right/wrong tally, used by the end-of-session summary. */
+/* ---------- cloze cards: which were met, and how they went ----------
+   The seen list is what lets the quiz hand out a different sentence each
+   time; the counters are what shows which cards are too open or too hard
+   (srs.worstCards). Five ids per word is all five cards, so "seen longest
+   ago" is always the first. */
+const CLOZE_MEMORY = 5;
+export const clozeSeen = wordId => state.clozeSeen[wordId] || [];
+export function markClozeSeen(wordId, cardId){
+  const list = clozeSeen(wordId).filter(id => id !== cardId);
+  list.push(cardId);
+  state.clozeSeen[wordId] = list.slice(-CLOZE_MEMORY);
+  return save();
+}
+/** outcome: 'correct' | 'wrong' | 'synonym' - every call is one showing. */
+export function countCloze(cardId, outcome){
+  const c = state.clozeStats[cardId] ||
+    (state.clozeStats[cardId] = { shown:0, correct:0, wrong:0, synonym:0 });
+  c.shown++;
+  if(outcome in c) c[outcome]++;
+  return save();
+}
+export const clozeStats = () => state.clozeStats;
+
+/** Today's right/wrong tally: the home screen's count and the daily budget. */
 export function logAnswer(right){
-  const t = new Date().toISOString().slice(0,10);
+  const t = dayKey();
   const day = state.log[t] || (state.log[t] = { right:0, wrong:0 });
   right ? day.right++ : day.wrong++;
   return save();
 }
-export const todayLog = () => state.log[new Date().toISOString().slice(0,10)] || { right:0, wrong:0 };
+export const todayLog = () => state.log[dayKey()] || { right:0, wrong:0 };
 
 /** Wipe every word, lesson and log - a hard reset back to a fresh install.
  *  Developer-only tool (see js/settings.js); not reachable from normal UI.

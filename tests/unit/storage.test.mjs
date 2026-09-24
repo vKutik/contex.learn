@@ -7,7 +7,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as store from '../../js/storage.js';
-import { fresh, wordRecord, DAY_MS } from '../helpers/fixture.mjs';
+import { fresh, wordRecord, DAY_MS, today } from '../helpers/fixture.mjs';
 
 beforeEach(fresh);
 
@@ -20,7 +20,7 @@ test('under Node nothing is persisted anywhere - the suite cannot touch real pro
 
 test('a fresh store is empty in every compartment', () => {
   const s = store.snapshot();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']){
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']){
     assert.deepEqual(s[key], {}, `${key} should start empty`);
   }
   assert.deepEqual(s.grants, []);
@@ -28,7 +28,7 @@ test('a fresh store is empty in every compartment', () => {
 
 test('load() survives having no back end at all and still returns a usable shape', async () => {
   const s = await store.load();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']) assert.ok(s[key]);
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']) assert.ok(s[key]);
   assert.ok(Array.isArray(s.grants));
 });
 
@@ -72,7 +72,7 @@ test('the daily tally counts right and wrong under today\'s date', async () => {
   await store.logAnswer(true);
   await store.logAnswer(false);
   assert.deepEqual(store.todayLog(), { right:2, wrong:1 });
-  const key = new Date().toISOString().slice(0,10);
+  const key = today();
   assert.deepEqual(Object.keys(store.snapshot().log), [key]);
 });
 

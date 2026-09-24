@@ -146,6 +146,23 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
     await page.close_();
   });
 
+  test('reading ahead, "another word" walks every open word too', async () => {
+    // nothing is due, so every word is equally "not late" - which is exactly
+    // when the walk used to bounce between the first two
+    const page = await app.page(progress({ ids:[0,1,2,3,4], reading: dateIn(4) }));
+    await page.click('#reading');
+    await page.click('#ahead');
+    await page.waitForSelector('.story');
+    const seen = [];
+    for(let i = 0; i < 4; i++){
+      seen.push((await page.textContent('.muted')).split('·')[0].trim());
+      await page.click('#another');
+      await page.waitForSelector('.story');
+    }
+    assert.equal(new Set(seen).size, 4, `walked ${seen.join(' -> ')}`);
+    await page.close_();
+  });
+
   test('the highlight steps back as a word settles', async () => {
     const quiet = await app.page(progress({ ids:[0], reading: daysAgo(1), proven:[0], box:4 }));
     await quiet.click('#reading');
