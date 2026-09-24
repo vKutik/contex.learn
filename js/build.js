@@ -1,3 +1,3 @@
 /* build.js - the id of the deployed build. Written by tools_stamp.py;
    do not edit by hand. See "Staying up to date" in the README. */
-export const BUILD = '20260924-1601-29db3bf';
+export const BUILD = '20260924-1603-41b371b';

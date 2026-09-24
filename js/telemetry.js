@@ -46,13 +46,19 @@ export function startTelemetry(where){
   window.addEventListener('unhandledrejection', ev =>
     fail(ev.reason?.message || ev.reason, 'promise', ev.reason?.stack));
 
-  // hidden is the last moment a phone reliably lets a page run
-  document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState !== 'hidden') return;
-    track('leave', { screen: where() });
+  // hidden is the last moment a phone reliably lets a page run. iOS can say
+  // "hidden" twice for one trip away, and pagehide may come on top of it, so
+  // a leave is logged once and not again until the page has been visible
+  let away = false;
+  const leave = () => {
+    if(!away){ away = true; track('leave', { screen: where() }); }
     store.flushEvents();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'hidden') leave(); else away = false;
   });
-  window.addEventListener('pagehide', () => store.flushEvents());
+  window.addEventListener('pagehide', leave);
+  window.addEventListener('pageshow', () => { away = false; });
 }
 
 /* ---------- reading the log back ---------- */

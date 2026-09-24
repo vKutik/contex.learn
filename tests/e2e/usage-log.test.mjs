@@ -139,6 +139,22 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('one trip away is one leave, however many hide signals the browser sends', async () => {
+    const page = await app.page();
+    await page.waitForSelector('#list');
+    const hide = state => page.evaluate(s => {
+      Object.defineProperty(document, 'visibilityState', { configurable:true, get: () => s });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+    await hide('hidden'); await hide('hidden');                  // iOS, twice in 25 ms
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await hide('visible');
+    await hide('hidden');                                        // a second, real trip away
+    const { events } = await savedEvents(page, has('leave'));
+    assert.equal(events.filter(x => x.e === 'leave').length, 2);
+    await page.close_();
+  });
+
   test('settings shows the log and exports it, with the progress, as a file', async () => {
     const page = await app.page(progress({ ids:[0,1] }));
     await page.click('#settings');
