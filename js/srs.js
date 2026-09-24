@@ -121,6 +121,19 @@ export function introduce(id){
   return store.putWord(id, s);
 }
 
+/** What a grade is about to be measured against: the box, the days since the
+ *  word was last seen, and how late it came back. Read *before* grade(), so
+ *  the usage log can say whether an interval was too long - which is the
+ *  question the whole of STEPS rests on. */
+export function reviewContext(id){
+  const s = store.getWord(id);
+  if(!s) return { box:0, elapsed:null, overdue:0 };
+  const t = today();
+  return { box: s.box,
+           elapsed: s.lastSeen ? daysBetween(s.lastSeen, t) : null,
+           overdue: s.next ? Math.max(0, daysBetween(s.next, t)) : 0 };
+}
+
 /** grade: 0 forgot, 1 hard, 2 good, 3 easy. */
 export function grade(id, g){
   const s = store.getWord(id) || { box:0, right:0, wrong:0, seen:0 };

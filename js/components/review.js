@@ -15,7 +15,8 @@ const GRADES = [
  * @param {HTMLElement} container
  * @param {object} word
  * @param {{done:number,total:number,revealed:boolean,fam?:object}} pos
- * @param {{onReveal:Function, onGrade:(g:number)=>void, onRerender:Function}} handlers
+ * @param {{onReveal:(mode:string)=>void, onGrade:(g:number)=>void, onRerender:Function}} handlers
+ *   `mode` is which prompt was asked: 'cloze' or 'meaning'.
  */
 export function renderReview(container, word, pos, handlers){
   const seen = store.getWord(word.id)?.seen || 0;
@@ -36,7 +37,7 @@ export function renderReview(container, word, pos, handlers){
         <p class="muted">Recall it yourself, out loud, and only then reveal it.</p>
       </div>
       <button class="go" id="show">Show answer</button>`;
-    container.querySelector('#show').onclick = handlers.onReveal;
+    container.querySelector('#show').onclick = () => handlers.onReveal(askCloze ? 'cloze' : 'meaning');
     return;
   }
 

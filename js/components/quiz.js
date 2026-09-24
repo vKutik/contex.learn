@@ -210,7 +210,9 @@ const OPT = { gap:'pill-opt', match:'sentence-opt', focus:'pill-opt yn', choice:
 /**
  * @param {HTMLElement} container
  * @param {Array} questions
- * @param {{onAnswer?:(q,ok)=>void, onDone:(score,total)=>void}} handlers
+ * @param {{onAnswer?:(q,ok,how)=>void, onDone:(score,total)=>void}} handlers
+ *   `how` is { ms, pick }: how long the question was on screen before the
+ *   tap, and which of `q.options` was tapped (its index before shuffling).
  */
 export function runQuiz(container, questions, handlers){
   let i = 0, score = 0, firstDraw = true;
@@ -221,7 +223,7 @@ export function runQuiz(container, questions, handlers){
     // lesson comprehension questions arrive without a kind and use `question`
     const raw  = questions[i];
     const q    = { ...raw, kind: raw.kind || 'choice', prompt: raw.prompt ?? raw.question };
-    const tagged = q.options.map((text, k) => ({ text, ok: k === q.correctIndex }));
+    const tagged = q.options.map((text, k) => ({ text, k, ok: k === q.correctIndex }));
     // Yes/No keeps its order; everything else is shuffled
     const opts = q.kind === 'focus' ? tagged : shuffle(tagged);
 
@@ -240,6 +242,7 @@ export function runQuiz(container, questions, handlers){
     if(firstDraw) firstDraw = false; else easeIn(container);
 
     const buttons = [...container.querySelectorAll('[data-k]')];
+    const shownAt = Date.now();
 
     buttons.forEach(btn => btn.onclick = () => {
       const chosen = opts[+btn.dataset.k];
@@ -259,7 +262,7 @@ export function runQuiz(container, questions, handlers){
       note.innerHTML = q.explain || '';
       note.hidden = !q.explain;
 
-      handlers.onAnswer && handlers.onAnswer(q, chosen.ok);
+      handlers.onAnswer && handlers.onAnswer(q, chosen.ok, { ms: Date.now() - shownAt, pick: chosen.k });
 
       // auto-advance, or sooner if they tap anywhere once they have read it
       const next = () => { container.onclick = null; clearTimeout(timer); i++; draw(); };

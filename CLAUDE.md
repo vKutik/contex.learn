@@ -55,6 +55,12 @@ worth ⅓ for being opened, ⅔ once proved inside a passage, and the whole of
 it at box 4. Under it, the day's answer tally. Beside each word, a
 three-dot familiarity index whose last dot cools when the word is overdue.
 
+**Usage log.** Every answer, reveal, grade, tooltip lookup and screen is
+appended to a local event log, so where learners struggle can be read
+instead of guessed. It never changes learning and never leaves the device:
+Settings shows it and exports it as a file; the developer card summarises it.
+See "Usage log" below.
+
 **Other.** 100 human pronunciation recordings from Wiktionary, served from
 the repo and loudness-matched. A `+5 words now` button in Settings. A
 developer card behind five taps on the Settings title. A stale-build
@@ -86,6 +92,7 @@ js/
   srs.js                   scheduling rules, no DOM
   session.js               one review sitting's rules, no DOM
   settings.js              app preferences, the developer unlock
+  telemetry.js             the usage log: track(), error capture, summary, export
   util.js                  shuffle, one
   fresh.js                 reloads a tab running a replaced build
   build.js                 generated: the build id
@@ -141,6 +148,36 @@ rsched { [wordId]: { step, next } }   when this word is next due a text
 log    { 'YYYY-MM-DD': { right, wrong } }
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 ```
+
+A second key, `vocab-events`, holds the usage log (also only via
+`storage.js`): `{ uid, events: [...] }`, at most 3000 events, oldest dropped.
+
+### Usage log
+
+Every event is `{ t, s, b, e, ...fields }` — time in ms, page session,
+build id, event name. Written by `telemetry.js`'s `track()`.
+
+| `e` | fields | where |
+|---|---|---|
+| `open` | `storage, vw, lang, due, rdue, opened` | boot |
+| `screen` | `name`, and `l, st` for a lesson stage | every `go()` |
+| `answer` | `at` (recall/lesson/reading), `k` (mechanic), `w, ok, ms, pick`, `l` or `p, st` | every quiz tap |
+| `lesson_done` | `l, score, total` | end of a lesson quiz |
+| `reveal` | `w, mode` (cloze/meaning), `ms` | review, "Show answer" |
+| `grade` | `w, g, box, elapsed, overdue, ms` — measured *before* the grade | review |
+| `passage` | `p, w, why` (due/word/next/ahead/again) | a text is served |
+| `peek` | `w`, and `p` (passage) or `l` (lesson) | tooltip opened |
+| `say` / `audio_fail` | `w` | speaker |
+| `grant`, `reset`, `export` | — | Settings |
+| `leave` | `screen` | tab hidden |
+| `stale_reload` | `to` | fresh.js |
+| `error` | `msg, at, stack` | uncaught error or rejection, 20 a sitting |
+
+`pick` is the tapped option's index in `q.options` before shuffling, so
+`q.correctIndex` (0 for every generated mechanic) says whether and what it
+missed. The log is never read by `srs.js`; a progress reset leaves it alone.
+Nothing in `js/` may reach the network except `fresh.js`'s version check —
+`deploy/` enforces it. Sending the log to a server is a future, separate step.
 
 ---
 
@@ -211,7 +248,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 221 tests, about 20 seconds
+node tests/run.mjs            # 243 tests, about 25 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

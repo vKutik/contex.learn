@@ -6,6 +6,7 @@
  * dictionary, so the same module serves lessons and extra reading alike.
  */
 import { showTooltip, hideTooltip } from './tooltip.js';
+import { track } from '../telemetry.js';
 
 /**
  * @param {HTMLElement} container element to render into
@@ -40,6 +41,9 @@ export function initReader(container, passage, dict, famOf){
       // a passage's own sense wins over the card's when this text uses the
       // word differently - see the polysemy note in js/data/passages.js
       const sense = (passage.w === word.id && passage.sense) ? passage.sense : word.definition;
+      // a text that sends people to the tooltip again and again is a text
+      // that isn't carrying its word - the usage log counts it per passage
+      track('peek', passage.w != null ? { w: word.id, p: passage.id } : { w: word.id, l: passage.id });
       // translation is on the word object but left out of the tooltip for now
       showTooltip(el, {
         title: `${word.word} /${word.ipa}/`,

@@ -20,6 +20,7 @@ import { hideTooltip } from './components/tooltip.js';
 import { paint, easeIn } from './components/motion.js';
 import { shuffle, one } from './util.js';
 import { watchForNewBuild } from './fresh.js';
+import { track, startTelemetry, summarize, exportLog } from './telemetry.js';
 const screen = () => document.getElementById('screen');
 const DICT = dictOf(words);
 /* ---------------- router ---------------- */
@@ -30,6 +31,8 @@ let current = { name:'home', params:{} };
 function go(name, params = {}){
   hideTooltip();
   current = { name, params };
+  // a lesson is four screens under one name: say which one, and of which lesson
+  track('screen', name === 'lesson' ? { name, l: params.id, st: params.stage ?? 0 } : { name });
   paint(screen(), () => routes[name](params), () => window.scrollTo(0,0));
 }
 /** Same screen, fresh content - a card stepping to its next example. */
@@ -47,6 +50,10 @@ const backButton = (label = 'Back', to = 'home') =>
   `<button class="go" data-back="${to}">${label}</button>`;
 const wireBack = () => screen().querySelectorAll('[data-back]')
   .forEach(b => b.onclick = () => go(b.dataset.back));
+/** Every quiz answer goes into the usage log the same way: where it was
+ *  asked, which mechanic, which word, what was tapped and how fast. */
+const answered = (at, q, ok, how, extra = {}) =>
+  track('answer', { at, k: q.kind, w: q.wordId ?? null, ok, ms: how.ms, pick: how.pick, ...extra });
 /** Both quizzes finish the same way: the score, a line about it, then a way
  *  back into the text. Only the wording and those buttons differ, so the
  *  caller passes them and wires their clicks afterwards. */
@@ -172,7 +179,7 @@ function lessonRecall(lesson, ws){
       Answer from memory — a wrong guess teaches more than another read.</p>
     <div id="stage"></div>`;
   runQuiz(screen().querySelector('#stage'), questions, {
-    onAnswer: (q, ok) => store.logAnswer(ok),
+    onAnswer: (q, ok, how) => { store.logAnswer(ok); answered('recall', q, ok, how, { l: lesson.id }); },
     onDone: async () => {
       await store.setLessonStage(lesson.id,'reading');
       go('lesson',{ id:lesson.id, stage:2 });
@@ -201,12 +208,14 @@ function lessonQuiz(lesson, ws){
   ];
   screen().innerHTML = `<h1>${lesson.title}</h1><div id="stage"></div>`;
   runQuiz(screen().querySelector('#stage'), questions, {
-    onAnswer: (q, ok) => {
+    onAnswer: (q, ok, how) => {
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok && q.wordId != null) store.markReadCorrect(q.wordId);
+      answered('lesson', q, ok, how, { l: lesson.id });
     },
     onDone: async (score, total) => {
       await store.setLessonStage(lesson.id,'done');
+      track('lesson_done', { l: lesson.id, score, total });
       scoreScreen(score, total,
         score === total
           ? 'The text carried every answer. That is how words are learned outside a card.'
@@ -220,6 +229,9 @@ function lessonQuiz(lesson, ws){
   });
 }
 /* ---------------- review ---------------- */
+/* When the prompt went up and when the answer was shown: how long recall
+   took, and how long the grade took after it, for the usage log. */
+let promptAt = 0, revealAt = 0;
 routes.review = params => {
   const { session: sess, revealed } = params;
   if(session.isFinished(sess)){
@@ -241,13 +253,20 @@ routes.review = params => {
     return wireBack();
   }
   const word = wordById(session.current(sess));
+  if(!revealed) promptAt = Date.now();
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(screen().querySelector('#stage'), word,
     { ...session.progress(sess), revealed, fam: srs.familiarity(word.id, textsRead(word.id)) },
     {
-      onReveal: () => go('review', { ...params, revealed:true }),
+      onReveal: mode => {
+        revealAt = Date.now();
+        track('reveal', { w: word.id, mode, ms: revealAt - promptAt });
+        go('review', { ...params, revealed:true });
+      },
       onRerender: rerender,
       onGrade: async g => {
+        // measured before grading: what the interval was, not what it becomes
+        track('grade', { w: word.id, g, ...srs.reviewContext(word.id), ms: Date.now() - revealAt });
         await srs.grade(word.id, g);
         go('review', { session: session.answer(sess, word.id, g), revealed:false });
       }
@@ -278,6 +297,8 @@ routes.reading = ({ id = null, word: only = null, after = null, ahead = false } 
   const passage = id !== null ? passages[id] : pickText(only ?? nextWord(due, after));
   if(!passage) return go('home');
   const word  = wordById(passage.w);
+  track('passage', { p: passage.id, w: passage.w,
+    why: id !== null ? 'again' : only !== null ? 'word' : after !== null ? 'next' : due.length ? 'due' : 'ahead' });
   const late  = srs.overdueBy(passage.w);
   const total = shelfOf(passage.w).length;
   const done  = textsRead(passage.w);
@@ -370,7 +391,9 @@ routes.readingQuiz = ({ id }) => {
   screen().innerHTML = '<div id="stage"></div>';
   runQuiz(screen().querySelector('#stage'), questions, {
     // getting it right from the passage alone is what turns a word amber
-    onAnswer: (q, ok) => {
+    onAnswer: (q, ok, how) => {
+      // the rung this text was served on, before gradeReading moves it
+      answered('reading', q, ok, how, { p: passage.id, st: store.readingPlan(passage.w)?.step ?? null });
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok) store.markReadCorrect(q.wordId);
     },
@@ -429,23 +452,66 @@ routes.settings = ({ confirming = false, note = '' } = {}) => {
       <p class="muted">Saving to: ${store.storageLabel()}</p>
     </div>
     ${newWordsCard()}
+    ${usageCard()}
     ${creditsCard()}
     ${settings.isDevMode() ? devCard(confirming) : ''}`;
   screen().querySelector('#tap').onclick = () => {
     if(settings.registerUnlockTap()) go('settings', { note:'Developer mode unlocked.' });
   };
   screen().querySelector('#plus5').onclick = async () => {
+    track('grant');
     await srs.grantMore();
     go('settings', { note:`Five more words opened. ${srs.newQuota()} waiting on the home screen.` });
   };
   const del = screen().querySelector('#devDelete');
   if(del) del.onclick = () => go('settings', { confirming:true });
   const yes = screen().querySelector('#devYes');
-  if(yes) yes.onclick = async () => { await store.resetAll(); go('home'); };
+  if(yes) yes.onclick = async () => { track('reset'); await store.resetAll(); go('home'); };
   const no = screen().querySelector('#devNo');
   if(no) no.onclick = () => go('settings');
+  screen().querySelector('#logExport').onclick = () => exportLog();
+  const clear = screen().querySelector('#logClear');
+  if(clear) clear.onclick = () => { store.clearEvents(); go('settings', { note:'Usage log cleared.' }); };
   wireBack();
 };
+/* The log is the learner's, so the learner can see that it exists and take
+   it away; nothing sends it anywhere by itself. */
+function usageCard(){
+  const n = store.eventLog().length;
+  return `<div class="card">
+    <h2>Usage log</h2>
+    <p class="muted">What you tapped and how long it took, kept on this device
+      only, to find the words and texts that give people trouble. It is never
+      sent anywhere — exporting it gives you a file you can choose to share.</p>
+    <div class="row"><span>Events recorded</span><b>${n}</b></div>
+    <button class="go ghost" id="logExport">Export as file</button>
+  </div>`;
+}
+/* The first things worth looking at in the log, for whoever is tuning the
+   app on this device. Ids become words here; telemetry.js only counts. */
+function logSummary(){
+  const x = summarize(store.eventLog());
+  if(!x.events) return '<p class="muted">Nothing logged yet.</p>';
+  const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
+  const rows = (title, items) => items.length
+    ? `<p class="muted">${title}</p>` + items.map(([k, v]) =>
+        `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('') : '';
+  const lessonCount = x.funnel[0].n;
+  return [
+    rows('Log', [['Events', x.events], ['Sittings', x.sessions],
+                 ['Since', new Date(x.since).toISOString().slice(0,10)]]),
+    rows('Lessons reaching each stage', lessonCount
+      ? x.funnel.map(f => [f.stage, `${f.n} · ${pct(f.n, lessonCount)}`]) : []),
+    rows('Answers by mechanic', x.mech.map(m =>
+      [m.k, `${pct(m.ok, m.n)} of ${m.n}${m.ms != null ? ` · ${(m.ms/1000).toFixed(1)}s` : ''}`])),
+    rows('Hardest words', x.words.map(r => [wordById(r.w).word, `${r.miss} missed of ${r.n}`])),
+    rows('Hardest texts', x.passages.map(r =>
+      [`#${r.p} · ${wordById(passages[r.p].w).word}`, `${r.miss} missed · ${r.peek} lookups`])),
+    rows('Where the tab was left', x.exits.map(r => [r.screen, r.n])),
+    // an error message is whatever the browser said: show it, never run it
+    rows('Recent errors', x.errors.map(r => [r.msg.replace(/[<>&]/g, c => `&#${c.charCodeAt(0)};`), r.at]))
+  ].join('');
+}
 /* Five a batch is not a limit imposed on the learner - it is the number the
    review intervals assume, and going faster than it is what buries people in
    reviews a week later. So the button opens one more batch rather than
@@ -492,13 +558,18 @@ function devCard(confirming){
   return `
     <div class="card">
       <h2>Developer</h2>
-      <p class="muted">Not part of the normal flow. Deletes every word, lesson and log
-        on this device - there is no undo.</p>
+      <p class="muted">Not part of the normal flow. Deletes every word, lesson and daily
+        tally on this device - there is no undo. The usage log below is kept.</p>
       ${confirming
         ? `<div class="fb no">Delete all progress? This cannot be undone.</div>
            <button class="go danger" id="devYes">Yes, delete everything</button>
            <button class="go ghost" id="devNo">Cancel</button>`
         : `<button class="go danger" id="devDelete">Delete all progress</button>`}
+    </div>
+    <div class="card">
+      <h2>What the log says</h2>
+      ${logSummary()}
+      <button class="go ghost" id="logClear">Clear log</button>
     </div>`;
 }
 /* ---------------- boot ---------------- */
@@ -514,5 +585,9 @@ function migrateLessonStages(){
 }
 await store.load();
 migrateLessonStages();
+startTelemetry(() => current.name);
+// who opened the app, on what, carrying how much work - one line a sitting
+track('open', { storage: store.storageLabel(), vw: window.innerWidth, lang: navigator.language,
+  due: srs.due().length, rdue: srs.readingDue().length, opened: srs.introducedIds().size });
 go('home');
 watchForNewBuild();

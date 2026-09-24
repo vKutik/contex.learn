@@ -13,6 +13,8 @@
  * put the page in a loop.
  */
 import { BUILD } from './build.js';
+import { track } from './telemetry.js';
+import { flushEvents } from './storage.js';
 
 const ONCE = 'reloaded-for-build';
 
@@ -27,6 +29,8 @@ async function check(){
     if(!live || live === BUILD) return;
     if(sessionStorage.getItem(ONCE) === live) return;   // already tried this one
     sessionStorage.setItem(ONCE, live);
+    track('stale_reload', { to: live });
+    flushEvents();                                      // the reload will not wait for the timer
     location.reload();
   } catch(e){}                                          // offline: keep running
 }

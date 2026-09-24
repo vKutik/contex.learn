@@ -56,7 +56,7 @@ export async function openApp(){
   /**
    * A fresh page with a fresh, empty storage.
    * @param {object|null} progress  value for localStorage['vocab-progress']
-   * @param {object} opts           { settings, path }
+   * @param {object} opts           { settings, events, path }
    */
   async function page(progress = null, opts = {}){
     const context = await browser.newContext({
@@ -76,6 +76,8 @@ export async function openApp(){
 
     if(progress) await pg.addInitScript(
       v => localStorage.setItem('vocab-progress', v), JSON.stringify(progress));
+    if(opts.events) await pg.addInitScript(
+      v => localStorage.setItem('vocab-events', v), JSON.stringify(opts.events));
     if(opts.settings) await pg.addInitScript(
       v => localStorage.setItem('vocab-settings', v), JSON.stringify(opts.settings));
 
@@ -136,3 +138,12 @@ export async function answerAll(page, max = 8){
 /** The progress the app has actually persisted, as an object. */
 export const savedProgress = page =>
   page.evaluate(() => JSON.parse(localStorage.getItem('vocab-progress') || '{}'));
+
+/** The usage log once the app has written it to the page's own storage.
+ *  It is written a moment after the last event, so wait until `until`
+ *  holds for it rather than reading whatever happens to be there. */
+export async function savedEvents(page, until = evs => evs.length > 0){
+  const fn = `(${until})(JSON.parse(localStorage.getItem('vocab-events') || '{"events":[]}').events)`;
+  await page.waitForFunction(fn, null, { timeout: 8000 });
+  return page.evaluate(() => JSON.parse(localStorage.getItem('vocab-events')));
+}
