@@ -51,17 +51,18 @@ export function progressRing(c){
     ${['known','read','started'].map(step =>
       `<span><i class="dot ${step}"></i>${STEP_NAME[step]} <b>${c[step]}</b></span>`).join('')}
   </div>
-  ${todayLine(c.today)}`;
+  ${todayLine(c.today, c.budget)}`;
 }
 
 /* The percentage is a slow number by design - a whole lesson moves it two
    points, because a hundred words really is a hundred words. Today's tally
    is the fast one, and it is the one that answers "did I get anywhere just
-   now". Nothing shows on a day with no work: an empty line is not progress. */
-function todayLine(t){
-  if(!t || !(t.right || t.wrong)) return '';
-  return `<div class="today">${plural(t.right + t.wrong, 'answer')} today
-    · <b>${t.right}</b> right</div>`;
+   now". It is also the day's budget, so the two share one line rather than
+   saying the same number twice; "right" joins it once there is any work. */
+function todayLine(t, budget){
+  const n = t ? t.right + t.wrong : 0;
+  const done = budget ? `${n} of ${plural(budget, 'answer')}` : plural(n, 'answer');
+  return `<div class="today">${done} today${n ? ` · <b>${t.right}</b> right` : ''}</div>`;
 }
 
 /**

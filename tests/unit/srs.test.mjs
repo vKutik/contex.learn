@@ -82,15 +82,13 @@ test('due() returns words at or past their date and nothing else', async () => {
 /* ---------- the daily budget ---------- */
 
 test('with nothing answered yet, budgetLeft is the whole daily budget', () => {
-  assert.equal(srs.doneToday(), 0);
   assert.equal(srs.budgetLeft(), DAILY_BUDGET);
 });
 
-test('doneToday counts every answer logged today, right and wrong alike', async () => {
+test('the budget counts every answer logged today, right and wrong alike', async () => {
   await store.logAnswer(true);
   await store.logAnswer(true);
   await store.logAnswer(false);
-  assert.equal(srs.doneToday(), 3);
   assert.equal(srs.budgetLeft(), DAILY_BUDGET - 3);
 });
 

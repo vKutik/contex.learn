@@ -75,7 +75,8 @@ routes.home = () => {
     read:    srs.countStep('read'),
     started: srs.countStep('started'),
     total:   words.length,
-    today:   store.todayLog()
+    today:   store.todayLog(),
+    budget:  DAILY_BUDGET
   };
   /* Exactly one filled button, and it is the first thing that can actually
      be done. Nailing "primary" to a fixed button is how a *disabled*
@@ -89,7 +90,6 @@ routes.home = () => {
   ].filter(Boolean);
   const lead = actions.find(a => !a.off);
   screen().innerHTML = progressRing(counts) +
-    `<p class="muted budget">${srs.doneToday()} of ${DAILY_BUDGET} today</p>` +
     (carriedOver > 0 ? `<p class="muted">${carriedOver} more due — waiting for tomorrow's budget.</p>` : '') +
     actions.map(a => `<button class="go${a === lead ? '' : ' ghost'}" id="${a.id}"${
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +

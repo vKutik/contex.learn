@@ -51,7 +51,7 @@ export function due(){
 
 /** Every answer logged today - card reviews, lesson quiz questions and
  *  reading checks alike. The budget measures work done, not cards alone. */
-export const doneToday = () => {
+const doneToday = () => {
   const log = store.todayLog();
   return log.right + log.wrong;
 };
