@@ -298,6 +298,12 @@ test('a word missed in recall climbs to box 1 at most on its first review', asyn
   assert.equal(store.getWord(1).box, 2, 'a word recalled right is not held back');
 });
 
+test('unsettledCount counts the words still in box 0, and nothing else', async () => {
+  for(let id = 0; id < 12; id++) await seedWord(id, { box: id < 11 ? 0 : 1 });
+  assert.equal(srs.unsettledCount(), 11);
+  assert.ok(srs.unsettledCount() > srs.BACKLOG_LIMIT, 'eleven is over the default limit of ten');
+});
+
 /* ---------- the reading ladder ---------- */
 
 test('answering from the text widens the gap, missing it goes back to day one', async () => {

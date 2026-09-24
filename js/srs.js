@@ -96,6 +96,13 @@ export const newQuota = () => {
   return Math.max(0, Math.min(byWindow, bySpace));
 };
 
+/** More words than this still in box 0 and the home screen asks "review
+ *  first?" before a new lesson - it still lets you, it just asks. */
+export const BACKLOG_LIMIT = 10;
+/** Words opened but not yet past their first interval. */
+export const unsettledCount = () =>
+  Object.values(store.snapshot().words).filter(w => w.box === 0).length;
+
 /** Open one more batch of five right now, without moving the cap itself. */
 export const grantMore = () => store.grantNewWords();
 

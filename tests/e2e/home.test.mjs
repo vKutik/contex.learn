@@ -128,4 +128,46 @@ describe('home', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     assert.deepEqual(page.errors, []);
     await page.close_();
   });
+  /* Twelve words still in box 0, due now, and lesson 3 not yet opened. */
+  const backlog = (n = 12) => {
+    const ids = Array.from({ length:n }, (_, i) => i);
+    return progress({ ids, next: daysAgo(1), opened: 24, lessons:{ 1:'done', 2:'done' } });
+  };
+
+  test('with more than ten words on day one, a new lesson asks "review first?" and still lets you in',
+    async () => {
+      const page = await app.page(backlog());
+      assert.match(await page.textContent('#screen'), /12 words are still on their first step/);
+      await page.click('#lesson');
+      await page.waitForSelector('.pagehead h1');
+      assert.equal(await page.textContent('.pagehead h1'), 'Review first?');
+      const bs = await buttons(page);
+      const filled = bs.filter(b => b.cls === 'go');
+      assert.deepEqual(filled.map(b => b.id), ['review'], 'the review is the recommendation');
+      assert.ok(bs.find(b => b.id === 'anyway' && b.cls.includes('ghost')), 'the lesson stays one tap away');
+
+      await page.click('#anyway');
+      await page.waitForSelector('.card .word');
+      assert.equal(await page.textContent('.pill'), 'New word 1 of 5');
+      assert.deepEqual(page.errors, []);
+      await page.close_();
+    });
+
+  test('"Review first" on that prompt starts a review sitting', async () => {
+    const page = await app.page(backlog());
+    await page.click('#lesson');
+    await page.waitForSelector('#review');
+    await page.click('#review');
+    await page.waitForSelector('#show');
+    assert.match(await page.textContent('.pill'), /^Done 0 of 7$/);
+    await page.close_();
+  });
+
+  test('ten or fewer on day one: Learn goes straight to the lesson', async () => {
+    const page = await app.page(backlog(10));
+    assert.doesNotMatch(await page.textContent('#screen'), /first step/);
+    await page.click('#lesson');
+    await page.waitForSelector('.card .word');
+    await page.close_();
+  });
 });

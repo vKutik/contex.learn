@@ -18,7 +18,10 @@ judged against that.
 **Learning flow.** Five new words per rolling 12 hours, delivered as a
 lesson in four stages. New words stop being handed out once the review
 backlog is bigger than what fits inside the daily answer budget — the
-schedule never buries a learner in the reviews it handed out itself.
+schedule never buries a learner in the reviews it handed out itself. With
+more than `BACKLOG_LIMIT` (10, in `srs.js`) words still in box 0 and a review
+ready, *Learn* asks "Review first?" before a new lesson — the review is the
+filled button, the lesson one ghost tap away.
 
 1. **Cards** — word, IPA, a human recording, definition, one example,
    an antonym, and a familiarity indicator. Five cards. The very first time

@@ -71,11 +71,15 @@ function scoreScreen(score, total, note, buttons){
   easeIn(screen());
   wireBack();
 }
+/** A review sitting of whatever the day's budget has room for, first seven. */
+const reviewBatch = () => srs.reviewQueue().slice(0, session.SESSION_SIZE);
+const startReview = () =>
+  go('review', { session: session.startSession(shuffle(reviewBatch())), revealed:false });
 /* ---------------- home ---------------- */
 routes.home = () => {
   const dueAll   = srs.dueSorted();
   const queue    = srs.reviewQueue();
-  const batch    = queue.slice(0, session.SESSION_SIZE);
+  const batch    = reviewBatch();
   const carriedOver = dueAll.length - queue.length;
   const wait     = srs.unlockIn();
   const opened   = srs.introducedIds().size;   // every word owns a shelf of texts
@@ -99,16 +103,38 @@ routes.home = () => {
     { id:'list',    label:'Word list' }
   ].filter(Boolean);
   const lead = actions.find(a => !a.off);
+  // a new lesson on top of a pile of words still on day one: ask first. A
+  // lesson already under way is finished without asking, and with nothing to
+  // review right now there is nothing to recommend instead.
+  const unsettled = srs.unsettledCount();
+  const askFirst = lesson && !cardsDone(lesson) && batch.length && unsettled > srs.BACKLOG_LIMIT;
   screen().innerHTML = progressRing(counts) +
     (carriedOver > 0 ? `<p class="muted">${carriedOver} more due — waiting for tomorrow's budget.</p>` : '') +
+    (askFirst ? `<p class="muted">${unsettled} words are still on their first step — review them before new ones.</p>` : '') +
     actions.map(a => `<button class="go${a === lead ? '' : ' ghost'}" id="${a.id}"${
       a.off ? ' disabled' : ''}>${a.label}</button>`).join('') +
     `<button class="linkbtn" id="settings">Settings</button>`;
-  on('review',   () => go('review',  { session: session.startSession(shuffle(batch)), revealed:false }));
-  on('lesson',   () => lesson && go('lesson', { id: lesson.id, stage: resumeStage(lesson) }));
+  on('review',   startReview);
+  on('lesson',   () => lesson && (askFirst
+    ? go('reviewFirst', { unsettled, batch: batch.length, lessonId: lesson.id })
+    : go('lesson', { id: lesson.id, stage: resumeStage(lesson) })));
   on('reading',  () => go('reading'));
   on('list',     () => go('list'));
   on('settings', () => go('settings'));
+};
+/* A new lesson asked for while many words are still on their first step:
+   the review is the recommendation, the lesson stays one tap away. */
+routes.reviewFirst = ({ unsettled, batch, lessonId }) => {
+  screen().innerHTML = pageHead('Review first?') + `
+    <div class="card"><p class="def">${plural(unsettled, 'word')} ${unsettled === 1 ? 'is' : 'are'}
+      still on their first step.</p>
+      <p class="muted">Five more now means more to forget by tomorrow. A short review
+        first makes the new words land on firmer ground.</p></div>
+    <button class="go" id="review">Review ${plural(batch, 'word')}</button>
+    <button class="go ghost" id="anyway">Start the lesson anyway</button>`;
+  on('review', startReview);
+  on('anyway', () => go('lesson', { id: lessonId, stage: 0 }));
+  wireBack();
 };
 /** Every card of this lesson has been opened. */
 const cardsDone = lesson => lesson.wordIds.every(id => store.getWord(id));
@@ -250,7 +276,7 @@ routes.review = params => {
   if(session.isFinished(sess)){
     const remembered = sess.remembered.length;
     const backTomorrow = sess.dropped.map(id => wordById(id).word);
-    const more = srs.reviewQueue().slice(0, session.SESSION_SIZE);
+    const more = reviewBatch();
     screen().innerHTML = pageHead('Session done') + `
       <div class="card">
         <div class="row"><span>Remembered</span><b>${remembered}</b></div>
@@ -261,7 +287,7 @@ routes.review = params => {
       ${more.length ? `<button class="go" id="more">Next ${plural(more.length, 'word')}</button>
          <button class="go ghost" data-back="home">Back</button>`
         : backButton('Back','home')}`;
-    on('more', () => go('review', { session: session.startSession(shuffle(more)), revealed:false }));
+    on('more', startReview);
     return wireBack();
   }
   const word = wordById(session.current(sess));
