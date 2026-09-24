@@ -15,7 +15,7 @@ import { pronunciations } from './data/pronunciation.js';
 import { renderReview } from './components/review.js';
 import { initReader, dictOf } from './components/reader.js';
 import { runQuiz, questionFor, anyQuestion, gapQuestion, passageFocusQuestion } from './components/quiz.js';
-import { exampleOf, markedOf } from './components/word.js';
+import { exampleOf, markedOf, gapOf } from './components/word.js';
 import { hideTooltip } from './components/tooltip.js';
 import { paint, easeIn } from './components/motion.js';
 import { shuffle, one, plural } from './util.js';
@@ -175,7 +175,7 @@ function lessonRecall(lesson, ws){
       Answer from memory — a wrong guess teaches more than another read.</p>
     <div id="stage"></div>`;
   runQuiz(stageEl(), questions, {
-    onAnswer: (q, ok) => store.logAnswer(ok),
+    onAnswer: (q, ok, outcome) => { if(outcome !== 'synonym') store.logAnswer(ok); },
     onDone: async () => {
       await store.setLessonStage(lesson.id,'reading');
       go('lesson',{ id:lesson.id, stage:2 });
@@ -204,7 +204,8 @@ function lessonQuiz(lesson, ws){
   ];
   screen().innerHTML = `<h1>${lesson.title}</h1><div id="stage"></div>`;
   runQuiz(stageEl(), questions, {
-    onAnswer: (q, ok) => {
+    onAnswer: (q, ok, outcome) => {
+      if(outcome === 'synonym') return;          // a good word, not the word: no mark
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok && q.wordId != null) store.markReadCorrect(q.wordId);
     },
@@ -370,14 +371,16 @@ routes.readingQuiz = ({ id }) => {
   screen().innerHTML = '<div id="stage"></div>';
   runQuiz(stageEl(), questions, {
     // getting it right from the passage alone is what turns a word amber
-    onAnswer: (q, ok) => {
+    onAnswer: (q, ok, outcome) => {
+      if(outcome === 'synonym') return;          // a good word, not the word: no mark
       store.logAnswer(ok);                       // counts towards today's tally
       if(ok) store.markReadCorrect(q.wordId);
     },
-    onDone: async (score, total) => {
+    onDone: async (score, total, { synonyms }) => {
       await store.markPassageRead(passage.id);
       // right: the next text for this word moves further out. wrong: tomorrow.
-      await srs.gradeReading(passage.w, score === total);
+      // A synonym typed in is neither, so the schedule stays where it was.
+      if(!synonyms) await srs.gradeReading(passage.w, score === total);
       scoreScreen(score, total,
         score === total
           ? 'You read the meaning out of the sentences around it. That is how words are actually learned.'
@@ -429,6 +432,7 @@ routes.settings = ({ confirming = false, note = '' } = {}) => {
       <p class="muted">Saving to: ${store.storageLabel()}</p>
     </div>
     ${newWordsCard()}
+    ${typingCard()}
     ${creditsCard()}
     ${settings.isDevMode() ? devCard(confirming) : ''}`;
   on('tap', () => {
@@ -437,6 +441,10 @@ routes.settings = ({ confirming = false, note = '' } = {}) => {
   on('plus5', async () => {
     await srs.grantMore();
     go('settings', { note:`Five more words opened. ${srs.newQuota()} waiting on the home screen.` });
+  });
+  on('typing', () => {
+    settings.setTypesCloze(!settings.typesCloze());
+    go('settings');
   });
   on('devDelete', () => go('settings', { confirming:true }));
   on('devYes', async () => { await store.resetAll(); go('home'); });
@@ -464,6 +472,20 @@ function newWordsCard(){
     <button class="go ghost" id="plus5">+5 words now</button>
   </div>`;
 }
+/* Typing the word is harder than picking it, and slower on a phone - so it is
+   offered, never the default. A typed synonym the card accepts counts as
+   neither right nor wrong. */
+function typingCard(){
+  const on = settings.typesCloze();
+  return `<div class="card">
+    <h2>Answer by typing</h2>
+    <p class="muted">In gap fills, type the missing word instead of tapping it.
+      A word that also fits the sentence is shown as such and does not count
+      against you.</p>
+    <div class="row"><span>Typing</span><b>${on ? 'on' : 'off'}</b></div>
+    <button class="go ghost" id="typing">${on ? 'Go back to tapping' : 'Type answers instead'}</button>
+  </div>`;
+}
 /* The recordings are other people's work under licences that ask for a
    credit, so the credit is in the app, not only in the README. */
 function creditsCard(){
@@ -482,8 +504,24 @@ function creditsCard(){
     ${voices}
   </div>`;
 }
+/* The cards learners miss most, so the ones too open or too hard to answer
+   can be rewritten in cloze_all.json. Only counts from this device. */
+function worstCardsList(){
+  const worst = srs.worstCards().slice(0, 10);
+  if(!worst.length) return '<p class="muted">No cloze card has been shown three times yet.</p>';
+  return `<div class="list">${worst.map(c => `
+    <div class="item">
+      <div class="ihead"><b>${Math.round(c.rate * 100)}% missed</b>
+        <span class="ipos">${c.id} · shown ${c.shown}${c.synonym ? ` · ${c.synonym} synonym` : ''}</span></div>
+      ${c.card ? `<div class="ex">${gapOf(c.card.s)} <i>${c.card.a}</i></div>` : ''}
+    </div>`).join('')}</div>`;
+}
 function devCard(confirming){
   return `
+    <div class="card">
+      <h2>Hardest cloze cards</h2>
+      ${worstCardsList()}
+    </div>
     <div class="card">
       <h2>Developer</h2>
       <p class="muted">Not part of the normal flow. Deletes every word, lesson and log

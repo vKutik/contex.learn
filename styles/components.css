@@ -107,6 +107,16 @@ button{font:inherit;cursor:pointer;border-radius:5px}
 .explain{margin-top:14px;padding-left:11px;border-left:3px solid var(--amber);
   font-size:.93rem;color:var(--soft)}
 .explain b{color:var(--ink);font-weight:620}
+.explain div+div{margin-top:5px}
+.explain .filled{color:var(--ink)}
+.explain mark{background:none;padding:0;margin:0;border:0;color:var(--amber);font-weight:620}
+
+/* typed answers, when the learner switched them on in Settings */
+.typed{display:flex;gap:8px;align-items:stretch}
+.typein{flex:1;min-width:0;font:inherit;font-size:1.05rem;padding:11px 13px;
+  border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink)}
+.typein:focus{outline:none;border-color:var(--green)}
+.typed .go{width:auto;margin:0;padding-left:18px;padding-right:18px}
 
 .grade{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .grade button{padding:13px 8px;border:1px solid var(--line);background:#fff;

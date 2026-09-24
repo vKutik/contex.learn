@@ -9,8 +9,9 @@
 import { words }    from './data/words.js';
 import { lessons }  from './data/lessons.js';
 import { passages } from './data/passages.js';
+import { cloze }    from './data/cloze.js';
 
-export { words, lessons, passages };
+export { words, lessons, passages, cloze };
 
 export const DAILY_NEW_LIMIT = 5;   // words per batch
 export const NEW_WINDOW_MS = 12 * 36e5;  // one batch per 12 hours
@@ -33,6 +34,11 @@ const SHELVES = passages.reduce((acc, p) => {
 
 /** The ten passages belonging to one word, in shelf order. */
 export const shelfOf = wordId => SHELVES[wordId] || [];
+
+/** A word's hand-written gap fills (js/data/cloze.js, built by
+ *  tools_cloze.py), or [] for a word that has none - the quiz then falls
+ *  back to cutting a gap out of the card's own examples. */
+export const clozeFor = wordId => cloze[wordId] || [];
 
 /* The async shape a REST backend would use. Nothing calls them yet - the
    screens read the static exports above - so they are the seam, not the

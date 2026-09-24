@@ -13,13 +13,15 @@
  *   rsched: { [wordId]: { step, next } }  when this word is next due a text
  *   log   : { 'YYYY-MM-DD': { right, wrong } }  answers per local day
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
+ *   clozeSeen : { [wordId]: [cardId] }  the last five cloze cards met, oldest first
+ *   clozeStats: { [cardId]: { shown, correct, wrong, synonym } }
  */
 import { dayKey } from './util.js';
 
 const KEY = 'vocab-progress';
 
 /** The compartments that are maps; `grants` is the one list. */
-const MAPS = ['words','ex','rw','read','lesson','rsched','log'];
+const MAPS = ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats'];
 const empty = () => ({ ...Object.fromEntries(MAPS.map(k => [k, {}])), grants:[] });
 
 let state = empty();
@@ -58,6 +60,7 @@ const Backend = {
 export async function load(){
   const raw = await Backend.read();
   if(raw){ try { state = { ...empty(), ...JSON.parse(raw) }; } catch(e){} }
+  // progress saved before a compartment existed simply starts it empty
   for(const k of MAPS) if(!state[k]) state[k] = {};
   if(!Array.isArray(state.grants)) state.grants = [];   // progress saved before grants existed
   // keys nothing reads any more - texts flagged by the removed "?" button, and
@@ -105,6 +108,29 @@ export const grantsSince = t => state.grants.filter(x => x > t).length;
 /* ---------- when each word is next due a reading ---------- */
 export const readingPlan = wordId => state.rsched[wordId] || null;
 export function setReadingPlan(wordId, plan){ state.rsched[wordId] = plan; return save(); }
+
+/* ---------- cloze cards: which were met, and how they went ----------
+   The seen list is what lets the quiz hand out a different sentence each
+   time; the counters are what shows which cards are too open or too hard
+   (srs.worstCards). Five ids per word is all five cards, so "seen longest
+   ago" is always the first. */
+const CLOZE_MEMORY = 5;
+export const clozeSeen = wordId => state.clozeSeen[wordId] || [];
+export function markClozeSeen(wordId, cardId){
+  const list = clozeSeen(wordId).filter(id => id !== cardId);
+  list.push(cardId);
+  state.clozeSeen[wordId] = list.slice(-CLOZE_MEMORY);
+  return save();
+}
+/** outcome: 'correct' | 'wrong' | 'synonym' - every call is one showing. */
+export function countCloze(cardId, outcome){
+  const c = state.clozeStats[cardId] ||
+    (state.clozeStats[cardId] = { shown:0, correct:0, wrong:0, synonym:0 });
+  c.shown++;
+  if(outcome in c) c[outcome]++;
+  return save();
+}
+export const clozeStats = () => state.clozeStats;
 
 /** Today's right/wrong tally: the home screen's count and the daily budget. */
 export function logAnswer(right){

@@ -46,9 +46,23 @@ so they never go stale:
 
 | Mechanic | What you see | What it checks |
 |---|---|---|
-| `gapQuestion` | a sentence with the word cut out, 3–4 word pills | whether the context tells you which word belongs |
+| `gapQuestion` | a hand-written cloze card (see below), 3–4 word pills | whether the context tells you which word belongs |
 | `matchQuestion` | the word, then two sentences — its own and another word's with this one transplanted in | the sense, not the shape |
 | `focusQuestion` | one sentence, one claimed meaning, yes/no | a three-second calibration |
+
+**Cloze cards.** Every gap fill — recall, the reading check's gap mechanic,
+and the review screen's "which word is missing" — asks one of the word's
+five hand-written cards (`js/data/cloze.js`, generated from `cloze_all.json`
+by `tools_cloze.py`). `pickCloze` in `quiz.js` is the only place a card is
+chosen: never the sentence just read, a card not met yet in the order
+definition → consequence → cause → contrast → collocation, then the one met
+longest ago. Wrong pills never include a word the card's `alt` accepts, one
+sharing the answer's root, or a `CONFLICTS` neighbour. A miss shows the
+sentence filled in, the definition and — when the tapped word is one the
+card was written against — its `why`. Typing the answer is a setting, off by
+default; a typed `alt` word counts as neither right nor wrong. The developer
+card lists the most-missed cards (`srs.worstCards`). A word with no cards
+falls back to a gap cut out of its examples.
 
 **Progress.** A gauge whose percentage is the *whole journey*: a word is
 worth ⅓ for being opened, ⅔ once proved inside a passage, and the whole of
@@ -68,6 +82,8 @@ detector that reloads a tab running replaced code.
 index.html                 markup only: the screen shell
 version.txt                the deployed build id (see "Deploying")
 tools_stamp.py             writes the build id into js/build.js + version.txt
+cloze_all.json             the cloze cards, source of truth: 100 words x 5
+tools_cloze.py             validates it and writes js/data/cloze.js
 .nojekyll                  REQUIRED — see "Deploying"
 audio/                     100 pronunciation recordings, one per word
 tests/                     the deploy gate; not served, not part of the app
@@ -94,6 +110,7 @@ js/
     lessons.js             20 lessons
     passages.js            1000 passages, ten per word
     pronunciation.js       recording, speaker and licence per word
+    cloze.js               500 cloze cards - GENERATED, edit cloze_all.json
   components/
     progress.js            the gauge, the legend, familiarity dots
     word.js                the {braces} marker + the shared card face
@@ -113,6 +130,7 @@ word     { id, word, pos, ipa, translation, definition, opposite, examples[], pl
 lesson   { id, title, wordIds[5], text, quiz[] }
 passage  { id, w, slot, also[], text, sense?, source }
 question { type, question, options[], correctIndex }      // lesson quiz
+cloze    { id: 'wordId:n', s, a, t, alt[], why{} }        // cloze.js[wordId][n]
 ```
 
 - An example marks its target word in braces: `"the water was {shallow}"`.
@@ -137,6 +155,8 @@ lesson { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
 rsched { [wordId]: { step, next } }   when this word is next due a text
 log    { 'YYYY-MM-DD': { right, wrong } }   keyed by the learner's local day
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
+clozeSeen  { [wordId]: [cardId] }   last five cloze cards met, oldest first
+clozeStats { [cardId]: { shown, correct, wrong, synonym } }
 ```
 
 ---
@@ -209,7 +229,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 228 tests, about 20 seconds
+node tests/run.mjs            # 258 tests, about 20 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

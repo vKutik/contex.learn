@@ -27,13 +27,15 @@ export const hoursAgo = n => Date.now() - n * 36e5;
  *   proven     ids answered correctly from a passage
  *   read       passage ids already answered
  *   lessons    { [lessonId]: stage }
+ *   clozeSeen  { [wordId]: [cardId] }  cloze cards already met, oldest first
  */
 export function progress({
   ids = [], next = dateIn(1), box = 0, opened = 0,
-  reading = dateIn(0), readingStep = 0, proven = [], read = [], lessons = {}
+  reading = dateIn(0), readingStep = 0, proven = [], read = [], lessons = {},
+  clozeSeen = {}
 } = {}){
   const state = { words:{}, ex:{}, rw:{}, read:{}, lesson:{ ...lessons },
-                  rsched:{}, log:{}, grants:[] };
+                  rsched:{}, log:{}, clozeSeen:{ ...clozeSeen }, clozeStats:{}, grants:[] };
   for(const id of ids){
     state.words[id] = { box, right:0, wrong:0, seen:0,
       new: hoursAgo(opened), next, lastSeen: daysAgo(1) };

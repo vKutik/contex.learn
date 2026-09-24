@@ -2,7 +2,8 @@
  * then say how hard it was; srs.js turns that into the next due date.
  * Like the flashcard, it is handed everything it shows about the word's
  * progress rather than asking the scheduler itself. */
-import { wordFace, wireWordFace, exampleOf, blankOf } from './word.js';
+import { wordFace, wireWordFace, exampleOf, blankOf, gapOf, filledOf } from './word.js';
+import { pickCloze, recordCloze } from './quiz.js';
 
 const GRADES = [
   { g:0, label:'Forgot', note:'again soon',       cls:'g0' },
@@ -20,9 +21,13 @@ const GRADES = [
  * @param {{onReveal:Function, onGrade:(g:number)=>void, onRerender:Function}} handlers
  */
 export function renderReview(container, word, pos, handlers){
+  // alternate between "which word is missing" and "what does it mean"
+  const askCloze = pos.seen % 2 === 0;
+  // the same card on both sides of the reveal: nothing is recorded until the
+  // grade, so asking twice gives the same answer
+  const card = askCloze ? pickCloze(word.id) : null;
+
   if(!pos.revealed){
-    // alternate between "which word is missing" and "what does it mean"
-    const askCloze = pos.seen % 2 === 0;
     container.innerHTML = `
       <div class="top">
         <span class="pill">Done ${pos.done} of ${pos.total}</span>
@@ -30,7 +35,8 @@ export function renderReview(container, word, pos, handlers){
       </div>
       <div class="card">
         ${askCloze
-          ? `<p class="muted">Which word is missing?</p><div class="cloze">${blankOf(exampleOf(word))}</div>`
+          ? `<p class="muted">Which word is missing?</p><div class="cloze">${
+              card ? gapOf(card.s) : blankOf(exampleOf(word))}</div>`
           : `<p class="muted">What does this word mean?</p>
              <div class="word">${word.word}</div><div class="pos">/${word.ipa}/ · ${word.pos}</div>`}
         <p class="muted">Recall it yourself, out loud, and only then reveal it.</p>
@@ -42,6 +48,7 @@ export function renderReview(container, word, pos, handlers){
 
   container.innerHTML = `
     <div class="card">
+      ${card ? `<div class="cloze">${filledOf(card.s, card.a)}</div>` : ''}
       ${wordFace(word, pos.fam)}
       <button class="say alt" data-alt>Show another example</button>
     </div>
@@ -51,6 +58,9 @@ export function renderReview(container, word, pos, handlers){
     </div>`;
 
   wireWordFace(container, word, handlers.onRerender);
-  container.querySelectorAll('[data-g]').forEach(b =>
-    b.onclick = () => handlers.onGrade(+b.dataset.g));
+  container.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
+    // a self-graded card: Forgot is the miss, anything else the hit
+    if(card) recordCloze(word.id, card.id, +b.dataset.g === 0 ? 'wrong' : 'correct');
+    handlers.onGrade(+b.dataset.g);
+  });
 }

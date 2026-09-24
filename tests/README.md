@@ -1,7 +1,7 @@
 # Tests — the deploy gate
 
 ```bash
-node tests/run.mjs                 # everything: 228 tests, about 20 seconds
+node tests/run.mjs                 # everything: 258 tests, about 20 seconds
 node tests/run.mjs unit            # one suite: unit | data | deploy | e2e
 node tests/run.mjs --no-browser    # skip Chromium (does not count as a full pass)
 ```
@@ -19,10 +19,10 @@ itself has no such requirement — it runs in any browser with ES modules.
 
 | suite | how many | needs | what it protects |
 |---|---|---|---|
-| `unit/` | 114 | nothing | the logic: scheduling, one review sitting, storage, the braces convention, the three quiz mechanics, the gauge |
-| `data/` | 24 | nothing | the contract every screen assumes about `js/data/` — ids, shelves, marks, recordings |
+| `unit/` | 127 | nothing | the logic: scheduling, one review sitting, storage, the braces convention, the three quiz mechanics, which cloze card is asked and what sits beside it, the gauge |
+| `data/` | 30 | nothing | the contract every screen assumes about `js/data/` — ids, shelves, marks, recordings, cloze cards and their sync with `cloze_all.json` |
 | `deploy/` | 23 | nothing | would this tree work on Pages: the two traps, every asset, every import, the architecture rules |
-| `e2e/` | 67 | Chromium | the app as a learner meets it: five screens, driven by tapping |
+| `e2e/` | 78 | Chromium | the app as a learner meets it: five screens, driven by tapping |
 
 The order is deliberate: a missing build stamp or a broken passage fails in
 under a second, before Chromium has started.

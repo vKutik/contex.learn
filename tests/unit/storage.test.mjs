@@ -20,7 +20,7 @@ test('under Node nothing is persisted anywhere - the suite cannot touch real pro
 
 test('a fresh store is empty in every compartment', () => {
   const s = store.snapshot();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']){
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']){
     assert.deepEqual(s[key], {}, `${key} should start empty`);
   }
   assert.deepEqual(s.grants, []);
@@ -28,7 +28,7 @@ test('a fresh store is empty in every compartment', () => {
 
 test('load() survives having no back end at all and still returns a usable shape', async () => {
   const s = await store.load();
-  for(const key of ['words','ex','rw','read','lesson','rsched','log']) assert.ok(s[key]);
+  for(const key of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']) assert.ok(s[key]);
   assert.ok(Array.isArray(s.grants));
 });
 
