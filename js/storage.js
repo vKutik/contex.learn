@@ -14,11 +14,12 @@
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
  *   clozeSeen : { [wordId]: [cardId] }  the last five cloze cards met, oldest first
  *   clozeStats: { [cardId]: { shown, correct, wrong, synonym } }
+ *   knew  : { [wordId]: timestamp }  said "I already know this" on its first card
  */
 const KEY = 'vocab-progress';
 
 const empty = () => ({ words:{}, ex:{}, rw:{}, read:{}, lesson:{}, rsched:{},
-                       log:{}, clozeSeen:{}, clozeStats:{}, grants:[], streak:0, last:null });
+                       log:{}, clozeSeen:{}, clozeStats:{}, knew:{}, grants:[], streak:0, last:null });
 
 let state = empty();
 
@@ -57,7 +58,7 @@ export async function load(){
   const raw = await Backend.read();
   if(raw){ try { state = { ...empty(), ...JSON.parse(raw) }; } catch(e){} }
   // progress saved before a compartment existed simply starts it empty
-  for(const k of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats']) if(!state[k]) state[k] = {};
+  for(const k of ['words','ex','rw','read','lesson','rsched','log','clozeSeen','clozeStats','knew']) if(!state[k]) state[k] = {};
   // texts flagged by the removed "?" button: back on the shelf, and the key
   // written out of the save rather than left behind as inert cruft
   if(state.murky){ delete state.murky; await save(); }
@@ -98,6 +99,13 @@ export const lessonStage = lessonId => state.lesson[lessonId] || null;
    word does - so tomorrow starts at five again, by itself. */
 export function grantNewWords(){ state.grants.push(Date.now()); return save(); }
 export const grantsSince = t => state.grants.filter(x => x > t).length;
+
+/* ---------- words the learner said they already knew ----------
+   A claim, not a proof: srs.claimKnown files the word far out, and the
+   lesson's recall check or the first review is what confirms or undoes it. */
+export function markKnew(wordId){ state.knew[wordId] = Date.now(); return save(); }
+export function unmarkKnew(wordId){ delete state.knew[wordId]; return save(); }
+export const knewIt = wordId => !!state.knew[wordId];
 
 /* ---------- when each word is next due a reading ---------- */
 export const readingPlan = wordId => state.rsched[wordId] || null;

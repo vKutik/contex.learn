@@ -74,9 +74,13 @@ export function dueSorted(){
 export const reviewQueue = () => dueSorted().slice(0, budgetLeft());
 
 /* ---------- the daily cap on new words ---------- */
+/* A word the learner already knew is not one of the five being learned, so
+   it does not use up a place in the window - knowing words is how a learner
+   gets through the course faster, not a way to lose a batch. */
 const startTimes = () => {
   const now = Date.now();
   return Object.keys(store.snapshot().words)
+    .filter(id => !store.knewIt(id))
     .map(id => store.getWord(id).new)
     .filter(t => t && now - t < NEW_WINDOW_MS)
     .sort((a,b) => a-b);
@@ -118,6 +122,40 @@ export function introduce(id){
   // the lesson was the first meeting; the first text is offered straight away,
   // and only then do the intervals start growing
   if(!store.readingPlan(id)) store.setReadingPlan(id, { step:0, next: today() });
+  return store.putWord(id, s);
+}
+
+/* ---------- "I already know this word" ----------
+ *
+ * Tapped on a word's first card. Believed, not proved: the word is filed at
+ * the box a word reaches after three good reviews, so it comes back once in
+ * a fortnight instead of tomorrow - one "Good" then and it is Learned, a miss
+ * and it starts from day one like any other. Its texts wait just as long.
+ * The lesson's recall stage still asks it, and a miss there undoes the claim
+ * at once (revokeKnown). It stays in the story: the story needs all five.
+ */
+const KNEW_BOX = 3;
+
+export async function claimKnown(id){
+  const s = store.getWord(id) || { box:0, right:0, wrong:0, seen:0 };
+  if(!s.new) s.new = Date.now();
+  s.box = Math.max(s.box, KNEW_BOX);
+  s.next = addDays(STEPS[s.box]);
+  s.lastSeen = today();
+  await store.setReadingPlan(id, { step: KNEW_BOX, next: addDays(READ_STEPS[KNEW_BOX]) });
+  await store.markKnew(id);
+  return store.putWord(id, s);
+}
+
+/** The recall check showed the claim was wrong: learn it like a new word -
+ *  first review tomorrow, first text today, and a place in the window. */
+export async function revokeKnown(id){
+  if(!store.knewIt(id)) return;
+  const s = store.getWord(id);
+  s.box = 0;
+  s.next = addDays(STEPS[0]);
+  await store.setReadingPlan(id, { step:0, next: today() });
+  await store.unmarkKnew(id);
   return store.putWord(id, s);
 }
 

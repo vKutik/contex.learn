@@ -22,6 +22,8 @@ schedule never buries a learner in the reviews it handed out itself.
 
 1. **Cards** — word, IPA, a human recording, definition, one example,
    an antonym, and a familiarity indicator. Five cards.
+   A first card also offers a quiet *I already know this word* — see
+   "Words the learner already knows" below.
 2. **Recall** — five gap fills, one per word, before the story. This is a
    retrieval attempt, and it deliberately avoids the sentence the card just
    showed.
@@ -30,6 +32,17 @@ schedule never buries a learner in the reviews it handed out itself.
    meaning; the text does not move.
 4. **Quiz** — the story's own comprehension questions plus one generated
    check on a word from today.
+
+**Words the learner already knows.** *I already know this word* on a
+word's first card is believed, not proved. The word is filed at box 3 (first
+review in 16 days, first text in 16 days) instead of tomorrow, and it does not
+take a place among the five new words in the 12-hour window, so knowing words
+moves a learner through the course faster. It stays in the story, which needs
+all five. The lesson's recall stage still asks it: a miss there withdraws the
+claim at once (`srs.revokeKnown`: box 0, review tomorrow, text today, a place
+in the window). Otherwise the 16-day review is the check - one Good makes it
+Learned, Forgot starts it from day one. The word is never removed from the
+course: a claim that nobody ever checks is how a learner loses a word.
 
 **Reading practice.** Every word owns a shelf of **ten** passages. The
 schedule brings one word back per interval (1, 3, 7, 16, 35, 90, 180 days,
@@ -160,6 +173,7 @@ log    { 'YYYY-MM-DD': { right, wrong } }
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 clozeSeen  { [wordId]: [cardId] }   last five cloze cards met, oldest first
 clozeStats { [cardId]: { shown, correct, wrong, synonym } }
+knew   { [wordId]: timestamp }  said "I already know this" on its first card
 ```
 
 ---
@@ -231,7 +245,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 251 tests, about 20 seconds
+node tests/run.mjs            # 258 tests, about 20 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

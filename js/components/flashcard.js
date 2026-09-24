@@ -11,15 +11,18 @@ import { wordFace, wireWordFace } from './word.js';
  * @param {HTMLElement} container
  * @param {object} word
  * @param {{label:string, next:string, fam?:object, isNew?:boolean}} pos
- * @param {{onNext:Function, onRerender:Function}} handlers
+ * @param {{onNext:Function, onRerender:Function, onKnown?:Function}} handlers
+ *   onKnown  offered on a word's first card only: "I already know this word"
  */
 export function renderFlashcard(container, word, pos, handlers){
   container.innerHTML = `
     <div class="top"><span class="pill">${pos.label}</span></div>
     <div class="card">${wordFace(word, pos.fam, pos.isNew)}</div>
     <button class="go" id="next">${pos.next}</button>
-    <button class="go ghost" data-alt>Show another example</button>`;
+    <button class="go ghost" data-alt>Show another example</button>
+    ${handlers.onKnown ? '<button class="go ghost" id="knew">I already know this word</button>' : ''}`;
 
   wireWordFace(container, word, handlers.onRerender);
   container.querySelector('#next').onclick = handlers.onNext;
+  if(handlers.onKnown) container.querySelector('#knew').onclick = handlers.onKnown;
 }

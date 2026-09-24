@@ -338,3 +338,48 @@ test('a word at level 0 never cools - there is nothing lit to fade', async () =>
 test('STEP_NAME covers every step the review screen can show', () => {
   for(const step of ['started','read','known']) assert.ok(srs.STEP_NAME[step]);
 });
+
+/* ---------- "I already know this word" ---------- */
+
+test('a word the learner already knew comes back in a fortnight, not tomorrow', async () => {
+  await srs.claimKnown(0);
+  const w = store.getWord(0);
+  assert.equal(w.box, 3);
+  assert.equal(w.next, dateIn(16), 'one review at 16 days is the check');
+  assert.deepEqual(store.readingPlan(0), { step:3, next: dateIn(16) },
+    'its texts wait just as long');
+  assert.ok(store.knewIt(0));
+  assert.deepEqual(srs.due(), [], 'nothing lands in tomorrow\'s reviews');
+});
+
+test('the claim is believed, not proved: it does not count as Learned until a review says so', async () => {
+  await srs.claimKnown(0);
+  assert.equal(srs.stepOf(0), 'started');
+  await srs.grade(0, 2);
+  assert.equal(srs.stepOf(0), 'known', 'one Good at the fortnight and it is Learned');
+});
+
+test('a word already known does not use up a place among the five new ones', async () => {
+  await srs.claimKnown(0); await srs.claimKnown(1);
+  await srs.introduce(2); await srs.introduce(3);
+  assert.equal(srs.newQuota(), 3);
+});
+
+test('missing a claimed word in recall puts it back on day one and back in the window', async () => {
+  await srs.claimKnown(0);
+  await srs.revokeKnown(0);
+  const w = store.getWord(0);
+  assert.equal(w.box, 0);
+  assert.equal(w.next, dateIn(1));
+  assert.deepEqual(store.readingPlan(0), { step:0, next: today() });
+  assert.equal(store.knewIt(0), false);
+  assert.equal(srs.newQuota(), 4, 'it is a word being learned now, so it takes its place');
+});
+
+test('a miss on a word nobody claimed to know changes nothing through revokeKnown', async () => {
+  await srs.introduce(0);
+  await srs.grade(0, 2);
+  const before = { ...store.getWord(0) };
+  await srs.revokeKnown(0);
+  assert.deepEqual(store.getWord(0), before);
+});

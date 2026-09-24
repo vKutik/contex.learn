@@ -183,4 +183,54 @@ describe('a lesson end to end', { skip: browserSkip ?? false, concurrency: 1 }, 
     assert.equal(learn.text, 'Learn');
     await page.close_();
   });
+
+  /* ---------- "I already know this word" ---------- */
+
+  test('a first card offers "I already know this word" as a quiet button, and taking it moves on',
+    async () => {
+      const page = await app.page();
+      await page.click('#lesson');
+      await page.waitForSelector('#knew');
+      assert.equal(await page.getAttribute('#knew', 'class'), 'go ghost',
+        'the one filled button stays "Got it"');
+      assert.equal((await page.$$('.go:not(.ghost)')).length, 1);
+
+      await page.click('#knew');
+      await page.waitForFunction(() => document.querySelector('.pill')?.textContent === 'New word 2 of 5');
+
+      const saved = await savedProgress(page);
+      const id = Object.keys(saved.knew)[0];
+      assert.equal(Object.keys(saved.knew).length, 1);
+      assert.equal(saved.words[id].box, 3, 'filed a fortnight out, not tomorrow');
+      await page.close_();
+    });
+
+  test('recall still checks a word the learner said they knew, and a miss puts it back on day one',
+    async () => {
+      // typing makes a wrong answer certain whichever card is drawn
+      const page = await app.page(null, { settings:{ typeCloze:true } });
+      await page.click('#lesson');
+      for(let i = 0; i < 5; i++){ await page.waitForSelector('#knew'); await page.click('#knew'); }
+
+      await page.waitForSelector('#knewnote');
+      assert.match(await page.textContent('#knewnote'), /words you\s+already know are here too/);
+      for(let i = 0; i < 5; i++){
+        await page.waitForSelector('.typein:not([readonly])');
+        await page.fill('.typein', 'zzzz');
+        await page.press('.typein', 'Enter');
+        await page.waitForSelector('.explain:not([hidden])');
+        await page.waitForTimeout(400);
+        await page.click('#stage', { position:{ x:4, y:4 }, force:true });
+      }
+      await page.waitForSelector('.story');
+
+      const saved = await savedProgress(page);
+      assert.deepEqual(saved.knew, {}, 'every claim the recall disproved is withdrawn');
+      for(const id of Object.keys(saved.words)){
+        assert.equal(saved.words[id].box, 0);
+        assert.equal(saved.rsched[id].step, 0, 'and its first text is offered today');
+      }
+      assert.deepEqual(page.errors, []);
+      await page.close_();
+    });
 });

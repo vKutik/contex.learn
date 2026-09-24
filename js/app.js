@@ -139,20 +139,24 @@ routes.lesson = ({ id, stage = 0, i = 0 }) => {
 };
 function lessonCards(lesson, ws, i){
   const word = ws[i];
+  const isNew = !store.getWord(word.id);
   const head = `<h1>${lesson.title}</h1>`;
   screen().innerHTML = head + '<div id="stage"></div>';
+  const onward = async () => {
+    if(i === ws.length-1){ await store.setLessonStage(lesson.id,'recall');
+      go('lesson',{ id:lesson.id, stage:1 }); }
+    else go('lesson',{ id:lesson.id, stage:0, i:i+1 });
+  };
   renderFlashcard(screen().querySelector('#stage'), word,
     { label:`New word ${i+1} of ${ws.length}`,
       fam: srs.familiarity(word.id, textsRead(word.id)),
-      isNew: !store.getWord(word.id),
+      isNew,
       next: i === ws.length-1 ? 'Try them from memory' : 'Got it' },
     {
-      onNext: async () => {
-        await srs.introduce(word.id);
-        if(i === ws.length-1){ await store.setLessonStage(lesson.id,'recall');
-          go('lesson',{ id:lesson.id, stage:1 }); }
-        else go('lesson',{ id:lesson.id, stage:0, i:i+1 });
-      },
+      onNext: async () => { await srs.introduce(word.id); await onward(); },
+      // only on a first meeting: a word already on the schedule has its own
+      // answer to "I know it" - Easy, in review
+      onKnown: isNew ? async () => { await srs.claimKnown(word.id); await onward(); } : null,
       onRerender: rerender
     });
 }
@@ -167,12 +171,21 @@ function lessonCards(lesson, ws, i){
    producing the word rather than picking it out of a line-up. */
 function lessonRecall(lesson, ws){
   const questions = shuffle(ws).map(w => gapQuestion(w, words, exampleOf(w)));
+  const claimed = ws.filter(w => store.knewIt(w.id)).length;
   screen().innerHTML = pageHead(lesson.title) + `
     <p class="muted">Before the story: which word belongs in each sentence?
       Answer from memory — a wrong guess teaches more than another read.</p>
+    ${claimed ? `<p class="muted" id="knewnote">The word${claimed === 1 ? '' : 's'} you
+      already know ${claimed === 1 ? 'is' : 'are'} here too. Get one right and it stays
+      out of your way; miss it and it joins your reviews from tomorrow.</p>` : ''}
     <div id="stage"></div>`;
   runQuiz(screen().querySelector('#stage'), questions, {
-    onAnswer: (q, ok, outcome) => { if(outcome !== 'synonym') store.logAnswer(ok); },
+    onAnswer: (q, ok, outcome) => {
+      if(outcome === 'synonym') return;
+      store.logAnswer(ok);
+      // "I already know it" is checked here, once, in the same tap as the rest
+      if(!ok) srs.revokeKnown(q.wordId);
+    },
     onDone: async () => {
       await store.setLessonStage(lesson.id,'reading');
       go('lesson',{ id:lesson.id, stage:2 });
