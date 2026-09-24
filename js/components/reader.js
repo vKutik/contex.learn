@@ -5,7 +5,8 @@
  * already carries. It never looks a word up itself - the caller passes a
  * dictionary, so the same module serves lessons and extra reading alike.
  */
-import { showTooltip, hideTooltip } from './tooltip.js';
+import { showTooltip } from './tooltip.js';
+import { track } from '../telemetry.js';
 
 /**
  * @param {HTMLElement} container element to render into
@@ -19,6 +20,8 @@ export function initReader(container, passage, dict, famOf){
     (passage.source ? `<div class="source">${passage.source}</div>` : '');
 
   container.querySelectorAll('mark').forEach(el => {
+    const word = dict.get(el.dataset.word);
+    if(!word) return;
     el.setAttribute('role','button');
     el.setAttribute('tabindex','0');
 
@@ -28,18 +31,16 @@ export function initReader(container, passage, dict, famOf){
        stage. By the last level the word sits in the text like any other and
        the eye has to do the noticing - which is the work that reading for
        meaning is supposed to involve. It stays tappable throughout. */
-    if(famOf){
-      const w = dict.get(el.dataset.word);
-      if(w) el.classList.add('lvl' + famOf(w.id));
-    }
+    if(famOf) el.classList.add('lvl' + famOf(word.id));
 
     const open = e => {
       e.stopPropagation();
-      const word = dict.get(el.dataset.word);
-      if(!word) return;
       // a passage's own sense wins over the card's when this text uses the
       // word differently - see the polysemy note in js/data/passages.js
       const sense = (passage.w === word.id && passage.sense) ? passage.sense : word.definition;
+      // a text that sends people to the tooltip again and again is a text
+      // that isn't carrying its word - the usage log counts it per passage
+      track('peek', passage.w != null ? { w: word.id, p: passage.id } : { w: word.id, l: passage.id });
       // translation is on the word object but left out of the tooltip for now
       showTooltip(el, {
         title: `${word.word} /${word.ipa}/`,
@@ -51,8 +52,6 @@ export function initReader(container, passage, dict, famOf){
     el.addEventListener('click', open);
     el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') open(e); });
   });
-
-  return { destroy: hideTooltip };
 }
 
 /** headword -> word object, for the dictionary argument above. */

@@ -8,6 +8,7 @@
  * browser profile, a temp file or a stub that could outlive the process.
  */
 import * as store from '../../js/storage.js';
+import { dayKey } from '../../js/util.js';
 
 const DAY = 864e5;
 
@@ -19,8 +20,8 @@ export const wordRecord = (over = {}) => ({
   box:0, right:0, wrong:0, seen:0, new: Date.now(), next: dateIn(1), lastSeen: today(), ...over
 });
 
-export const today  = () => new Date().toISOString().slice(0,10);
-export const dateIn = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+export const today  = () => dayKey();
+export const dateIn = n => dayKey(n);
 export const daysAgo = n => dateIn(-n);
 export const hoursAgo = n => Date.now() - n * 36e5;
 
@@ -35,7 +36,7 @@ export const seedDue = (id, over = {}) => seedWord(id, { next: daysAgo(1), ...ov
  * Run `fn` with Date.now() shifted by `offsetMs`, then put it back.
  *
  * Only Date.now() moves - `new Date()` does not - which is deliberate: the
- * rolling 24h cap is the one piece of logic that reads the clock as a number,
+ * rolling 12h cap is the one piece of logic that reads the clock as a number,
  * and shifting only that keeps the calendar (YYYY-MM-DD due dates) honest.
  */
 export async function withClock(offsetMs, fn){

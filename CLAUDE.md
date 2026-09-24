@@ -3,8 +3,8 @@
 You are working on **ContextLearn**, a vocabulary trainer for 100 English
 words. It is a static site: plain ES6 modules, no framework, no build step,
 no dependencies. It is served by GitHub Pages at
-`https://vkutik.github.io/read.words/` from the `main` branch of
-`vKutik/Cards-`.
+`https://vkutik.github.io/contex.learn/` from the `main` branch of
+`vKutik/contex.learn`.
 
 The design idea the whole thing rests on: **a word is learned from the
 sentences around it, not from a card.** Cards introduce a word; real
@@ -21,7 +21,9 @@ backlog is bigger than what fits inside the daily answer budget — the
 schedule never buries a learner in the reviews it handed out itself.
 
 1. **Cards** — word, IPA, a human recording, definition, one example,
-   an antonym, and a familiarity indicator. Five cards.
+   an antonym, and a familiarity indicator. Five cards. The very first time
+   a word is met, its `plain` line — a wordless retelling of the first
+   example — sits under the definition, so an abstract word gets a picture.
 2. **Recall** — five gap fills, one per word, before the story. This is a
    retrieval attempt, and it deliberately avoids the sentence the card just
    showed.
@@ -39,7 +41,13 @@ shelf without touching its due date, and *Another word* walks the due queue.
 
 **Review.** Classic spaced repetition on the cards: recall prompt, reveal,
 then one of four grades (Forgot / Hard / Good / Easy) which sets the next
-due date from `STEPS`.
+due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
+between a cloze card and "what does this word mean". Reviews come in
+sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
+Forgot comes back three cards later rather than last, a second Forgot sends
+the word to tomorrow, and a sitting stops after 20 answers. The due queue
+is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
+waits at the front of tomorrow's.
 
 **Three generated quiz mechanics**, all built from the word list at run time
 so they never go stale:
@@ -68,6 +76,12 @@ falls back to a gap cut out of its examples.
 worth ⅓ for being opened, ⅔ once proved inside a passage, and the whole of
 it at box 4. Under it, the day's answer tally. Beside each word, a
 three-dot familiarity index whose last dot cools when the word is overdue.
+
+**Usage log.** Every answer, reveal, grade, tooltip lookup and screen is
+appended to a local event log, so where learners struggle can be read
+instead of guessed. It never changes learning and never leaves the device:
+Settings shows it and exports it as a file; the developer card summarises it.
+See "Usage log" below.
 
 **Other.** 100 human pronunciation recordings from Wiktionary, served from
 the repo and loudness-matched. A `+5 words now` button in Settings. A
@@ -104,7 +118,8 @@ js/
   srs.js                   scheduling rules, no DOM
   session.js               one review sitting's rules, no DOM
   settings.js              app preferences, the developer unlock
-  util.js                  shuffle, one
+  telemetry.js             the usage log: track(), error capture, summary, export
+  util.js                  shuffle, one, dayKey, plural
   fresh.js                 reloads a tab running a replaced build
   build.js                 generated: the build id
   data/
@@ -125,13 +140,10 @@ js/
     review.js              the spaced-repetition screen
 ```
 
-`vocab-trainer.html` at the root is the superseded single-file original. It
-is not part of the app and nothing references it.
-
 ### Data contracts
 
 ```js
-word     { id, word, pos, ipa, translation, definition, opposite, examples[] }
+word     { id, word, pos, ipa, translation, definition, opposite, examples[], plain? }
 lesson   { id, title, wordIds[5], text, quiz[] }
 passage  { id, w, slot, also[], text, sense?, source }
 question { type, question, options[], correctIndex }      // lesson quiz
@@ -158,11 +170,41 @@ rw     { [wordId]: 1 }        proved correct from inside a passage
 read   { [passageId]: 1 }
 lesson { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
 rsched { [wordId]: { step, next } }   when this word is next due a text
-log    { 'YYYY-MM-DD': { right, wrong } }
+log    { 'YYYY-MM-DD': { right, wrong } }   keyed by the learner's local day
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 clozeSeen  { [wordId]: [cardId] }   last five cloze cards met, oldest first
 clozeStats { [cardId]: { shown, correct, wrong, synonym } }
 ```
+
+A second key, `vocab-events`, holds the usage log (also only via
+`storage.js`): `{ uid, events: [...] }`, at most 3000 events, oldest dropped.
+
+### Usage log
+
+Every event is `{ t, s, b, e, ...fields }` — time in ms, page session,
+build id, event name. Written by `telemetry.js`'s `track()`.
+
+| `e` | fields | where |
+|---|---|---|
+| `open` | `storage, vw, lang, due, rdue, opened` | boot |
+| `screen` | `name`, and `l, st` for a lesson stage | every `go()` |
+| `answer` | `at` (recall/lesson/reading), `k` (mechanic), `w, ok, out` (correct/wrong/synonym), `ms, pick`, `said` when typed, `card` for a cloze card, `l` or `p, st` | every quiz answer |
+| `lesson_done` | `l, score, total` | end of a lesson quiz |
+| `reveal` | `w, mode` (cloze/meaning), `card` if a cloze card, `ms` | review, "Show answer" |
+| `grade` | `w, g, box, elapsed, overdue, ms` — measured *before* the grade | review |
+| `passage` | `p, w, why` (due/word/next/ahead/again) | a text is served |
+| `peek` | `w`, and `p` (passage) or `l` (lesson) | tooltip opened |
+| `say` / `audio_fail` | `w` | speaker |
+| `grant`, `reset`, `export` | — | Settings |
+| `leave` | `screen` | tab hidden |
+| `stale_reload` | `to` | fresh.js |
+| `error` | `msg, at, stack` | uncaught error or rejection, 20 a sitting |
+
+`pick` is the tapped option's index in `q.options` before shuffling (null
+when the answer was typed), so `q.correctIndex` (0 for every generated
+mechanic) says whether and what it missed. The log is never read by `srs.js`; a progress reset leaves it alone.
+Nothing in `js/` may reach the network except `fresh.js`'s version check —
+`deploy/` enforces it. Sending the log to a server is a future, separate step.
 
 ---
 
@@ -178,8 +220,9 @@ clozeStats { [cardId]: { shown, correct, wrong, synonym } }
 3. **JSON-first.** No word, sentence, question or definition is written
    into a view. Everything comes from `js/data/`.
 4. **DRY.** Before adding a helper, check whether it exists: `util.js` for
-   arrays, `word.js` for the `{braces}` marker and the shared card face,
-   `motion.js` for screen transitions, `quiz.js` for question generation.
+   arrays, the learner's calendar day and plurals, `word.js` for the
+   `{braces}` marker and the shared card face, `motion.js` for screen
+   transitions, `quiz.js` for question generation.
    Every export in `js/` is imported by something — keep it that way. The
    three `fetch*` functions in `data.js` are the deliberate exception: they
    are the seam for a future backend.
@@ -199,7 +242,9 @@ clozeStats { [cardId]: { shown, correct, wrong, synonym } }
    option dims, the right answer lifts in amber, and a line says what the
    word means.
 10. **One tap is the answer.** No radio buttons, no submit buttons, no
-    keyboard input in the learning flow.
+    keyboard input in the learning flow. The one exception is typed cloze
+    answers, a setting the learner has to switch on; off by default, the
+    flow stays one tap.
 11. **Lists are rows with hairlines, not cards.** Do not nest a bordered,
     filled block inside a bordered card.
 
@@ -233,7 +278,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 257 tests, about 25 seconds
+node tests/run.mjs            # 287 tests, about 25 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract
@@ -257,8 +302,16 @@ still the difference between fixing one and re-discovering it.
   `fresh.js` compares them and reloads a tab that is running replaced code;
   if the two drift apart the check is useless.
 
-**Git.** Develop on `claude/commit-and-push-4t5e0k`, then fast-forward
-`main` and push both. Do not open pull requests unless asked.
+**Git.** Develop on the session's `claude/…` branch, then fast-forward
+`main` and push both — `main` is what Pages serves. Do not open pull
+requests unless asked.
+
+**Editing cloze cards.** Change `cloze_all.json`, then run
+`python3 tools_cloze.py`; never edit `js/data/cloze.js` by hand. The script
+refuses a card that breaks the schema (one `____`, 8–16 words, blank not in
+the first two, five cards with five different anchors, `alt` never holding
+the answer), and `tests/data/cloze.test.mjs` fails if the module and the
+JSON drift apart.
 
 ---
 

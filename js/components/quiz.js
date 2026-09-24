@@ -83,6 +83,9 @@ const surfaceLike = (word, shape) => realForm(word, shape) || inflect(word.word,
 const sameClass = (word, allWords) =>
   allWords.filter(w => w.pos === word.pos && w.id !== word.id);
 
+/* The focus mechanics answer yes or no, in this order - it is never shuffled. */
+const YES_NO = ['Yes, it fits', 'No, it does not'];
+
 /* ---------- 1. Context gap fill ----------
    The gap comes from a hand-written cloze card (js/data/cloze.js) whenever the
    word has one: five per word, each built so the sentence around the gap
@@ -148,9 +151,9 @@ const sharesRoot = (a, b) => {
  *  are attested in this shape come first, so the pills are genuine English
  *  forms rather than ones built by rule. */
 function pillsFor(pool, shape, answer){
-  const attested = shuffle(pool.filter(w => realForm(w, shape)));
-  const rest     = shuffle(pool.filter(w => !realForm(w, shape)));
-  return [...attested, ...rest]
+  const attested = [], rest = [];
+  for(const w of pool) (realForm(w, shape) ? attested : rest).push(w);
+  return [...shuffle(attested), ...shuffle(rest)]
     .map(w => matchCase(surfaceLike(w, shape), answer))
     .filter(t => t.toLowerCase() !== answer.toLowerCase())
     .slice(0, 3);
@@ -267,7 +270,7 @@ function focusQuestion(word, allWords){
     wordId: word.id,
     prompt: markedOf(example),
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> — ${word.definition}`
@@ -289,7 +292,7 @@ export function passageFocusQuestion(word, passage){
     wordId: word.id,
     prompt: passage.text,
     claim,
-    options: ['Yes, it fits', 'No, it does not'],
+    options: YES_NO,
     correctIndex: truthful ? 0 : 1,
     explain: truthful
       ? `<b>${word.word}</b> here means: ${passage.sense}`
@@ -343,21 +346,28 @@ function noteFor(q, outcome, said){
 /**
  * @param {HTMLElement} container
  * @param {Array} questions
- * @param {{onAnswer?:(q,ok,outcome)=>void, onDone:(score,total,{synonyms})=>void}} handlers
+ * @param {{onAnswer?:(q,ok,outcome,how)=>void, onDone:(score,total,{synonyms})=>void}} handlers
  *   outcome is 'correct' | 'wrong' | 'synonym'; a synonym is neither right nor
  *   wrong - the learner is not punished for a good word, and not credited for
  *   one they did not recall.
+ *   `how` is { ms, pick, said? }: how long the question was on screen before
+ *   the answer, which of `q.options` was tapped (its index before shuffling,
+ *   null when typed), and what was typed, if it was.
  */
 export function runQuiz(container, questions, handlers){
   let i = 0, score = 0, synonyms = 0, firstDraw = true;
 
   function draw(){
+    // the learner left mid-quiz (the back chevron): a pending auto-advance
+    // must not finish a quiz nobody is looking at - saving its result and
+    // painting its score over whichever screen they went to
+    if(!container.isConnected) return;
     if(i >= questions.length) return handlers.onDone(score, questions.length, { synonyms });
 
     // lesson comprehension questions arrive without a kind and use `question`
     const raw  = questions[i];
     const q    = { ...raw, kind: raw.kind || 'choice', prompt: raw.prompt ?? raw.question };
-    const tagged = q.options.map((text, k) => ({ text, ok: k === q.correctIndex }));
+    const tagged = q.options.map((text, k) => ({ text, k, ok: k === q.correctIndex }));
     // Yes/No keeps its order; everything else is shuffled
     const opts = q.kind === 'focus' ? tagged : shuffle(tagged);
     // a cloze card can be typed instead of tapped, when the learner asked for it
@@ -382,9 +392,10 @@ export function runQuiz(container, questions, handlers){
 
     // the screen itself already animated the first question in
     if(firstDraw) firstDraw = false; else easeIn(container);
+    const shownAt = Date.now();
 
     /* Both ways of answering end here: feedback, the record, then move on. */
-    function settle(outcome, said){
+    function settle(outcome, said, pick = null){
       if(outcome === 'correct') score++;
       if(outcome === 'synonym') synonyms++;
       if(q.cardId) recordCloze(q.wordId, q.cardId, outcome);
@@ -393,7 +404,8 @@ export function runQuiz(container, questions, handlers){
       note.innerHTML = noteFor(q, outcome, said);
       note.hidden = !note.innerHTML;
 
-      handlers.onAnswer && handlers.onAnswer(q, outcome === 'correct', outcome);
+      handlers.onAnswer?.(q, outcome === 'correct', outcome,
+        { ms: Date.now() - shownAt, pick, ...(pick === null && { said: String(said).slice(0, 40) }) });
 
       // auto-advance, or sooner if they tap anywhere once they have read it
       const next = () => { container.onclick = null; clearTimeout(timer); i++; draw(); };
@@ -429,12 +441,10 @@ export function runQuiz(container, questions, handlers){
       if(chosen.ok){
         btn.classList.add('is-right');
       } else {
-        // no red anywhere: the miss just steps back, the answer steps forward
-        btn.classList.add('is-dim');
-        buttons[opts.findIndex(o => o.ok)].classList.add('is-reveal');
-        buttons.forEach(b => { if(!b.className.match(/is-(right|reveal|dim)/)) b.classList.add('is-dim'); });
+        // no red anywhere: every miss steps back, the answer steps forward
+        buttons.forEach((b, k) => b.classList.add(opts[k].ok ? 'is-reveal' : 'is-dim'));
       }
-      settle(chosen.ok ? 'correct' : 'wrong', chosen.text);
+      settle(chosen.ok ? 'correct' : 'wrong', chosen.text, chosen.k);
     });
   }
 

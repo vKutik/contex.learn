@@ -7,6 +7,7 @@
  * the browser refuses to play it.
  */
 import { pronunciations } from '../data/pronunciation.js';
+import { track } from '../telemetry.js';
 
 /* One <audio> per word, kept so a second tap replays instantly. */
 const clips = new Map();
@@ -32,6 +33,7 @@ function stopAudio(){
  * @param {string} text  what to fall back to reading
  */
 export function say(wordId, text){
+  track('say', { w: wordId });
   const rec = pronunciations[wordId];
   if(!rec) return speak(text);
 
@@ -47,5 +49,8 @@ export function say(wordId, text){
   clip.currentTime = 0;
   // play() rejects on a missing file or a blocked autoplay gesture
   const started = clip.play();
-  if(started && started.catch) started.catch(() => { playing = null; speak(text); });
+  if(started && started.catch) started.catch(() => {
+    playing = null; speak(text);
+    track('audio_fail', { w: wordId });
+  });
 }

@@ -26,7 +26,7 @@
 /* example sentence blocks reuse the passage look at a smaller size */
 .ex{background:var(--wash-grey);border-left:3px solid var(--line);
   padding:11px 13px;margin-bottom:10px;font-size:.98rem}
-.ex mark, .ex b{background:var(--wash-mark);padding:0 3px;border-radius:2px;
+.ex mark{background:var(--wash-mark);padding:0 3px;border-radius:2px;
   font-weight:600;color:inherit}
 
 /* gap-fill sentence */

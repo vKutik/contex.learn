@@ -140,6 +140,24 @@ test('fresh.js only uses sessionStorage, and only for the reload guard', () => {
   assert.match(src, /sessionStorage/);
 });
 
+test('only storage.js knows where the usage log is kept', () => {
+  for(const [file, src] of Object.entries(source)){
+    if(file === 'js/storage.js') continue;
+    assert.doesNotMatch(src, /vocab-events/, `${file} names the usage-log key`);
+  }
+});
+
+/* The usage log promises it never leaves the device unless exported. The one
+   request the app makes is fresh.js asking for version.txt; anything else
+   that can reach a network is a promise broken. */
+test('the app sends nothing anywhere - the only request is the build check', () => {
+  for(const [file, src] of Object.entries(code)){
+    const net = linesMatching(src, /\b(fetch|sendBeacon|XMLHttpRequest|WebSocket|EventSource)\b/);
+    if(file === 'js/fresh.js') assert.equal(net.length, 1, 'fresh.js fetches version.txt and nothing else');
+    else assert.deepEqual(net, [], `${file} can reach the network`);
+  }
+});
+
 /* ---------- rule 2: srs.js has no DOM ---------- */
 
 test('the scheduling rules could move to a server untouched', () => {

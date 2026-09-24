@@ -1,7 +1,7 @@
 # Tests — the deploy gate
 
 ```bash
-node tests/run.mjs                 # everything: 257 tests, about 25 seconds
+node tests/run.mjs                 # everything: 287 tests, about 25 seconds
 node tests/run.mjs unit            # one suite: unit | data | deploy | e2e
 node tests/run.mjs --no-browser    # skip Chromium (does not count as a full pass)
 ```
@@ -19,10 +19,10 @@ itself has no such requirement — it runs in any browser with ES modules.
 
 | suite | how many | needs | what it protects |
 |---|---|---|---|
-| `unit/` | 122 | nothing | the logic: scheduling, one review sitting, storage, the braces convention, the three quiz mechanics, which cloze card is asked and what sits beside it, the gauge |
+| `unit/` | 139 | nothing | the logic: scheduling, one review sitting, storage, the usage log, the braces convention, the three quiz mechanics, which cloze card is asked and what sits beside it, the gauge |
 | `data/` | 36 | nothing | the contract every screen assumes about `js/data/` — ids, shelves, marks, recordings, cloze cards and their sync with `cloze_all.json`, and the quality bar every passage has to clear |
-| `deploy/` | 23 | nothing | would this tree work on Pages: the two traps, every asset, every import, the architecture rules |
-| `e2e/` | 76 | Chromium | the app as a learner meets it: five screens, driven by tapping |
+| `deploy/` | 25 | nothing | would this tree work on Pages: the two traps, every asset, every import, the architecture rules |
+| `e2e/` | 87 | Chromium | the app as a learner meets it: five screens, driven by tapping, and what the usage log records |
 
 The order is deliberate: a missing build stamp or a broken passage fails in
 under a second, before Chromium has started.
@@ -113,7 +113,9 @@ knows it exists.
 - No `package.json`, no `node_modules`, no CDN import, no bare specifier, no
   extensionless import.
 - Only `storage.js` and `settings.js` touch web storage, and only
-  `storage.js` knows the progress key.
+  `storage.js` knows the progress and usage-log keys.
+- Nothing in `js/` can reach the network except `fresh.js`'s one version
+  check — the usage log never leaves the device by itself.
 - `srs.js`, `util.js` and `data.js` never reach for the browser.
 - Only `word.js` reads the `{braces}` convention.
 - Every export is imported by something, bar the three documented `fetch*`

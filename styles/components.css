@@ -55,7 +55,6 @@ button{font:inherit;cursor:pointer;border-radius:5px}
 .word{font-size:2.3rem;font-weight:640;letter-spacing:-.035em;line-height:1.08;margin:6px 0}
 .pos{color:var(--soft);font-size:.92rem;font-weight:450;letter-spacing:0;margin-bottom:14px}
 .def{font-size:1.05rem;font-weight:450;margin-bottom:12px}
-.uk{font-size:1.05rem;font-weight:520;color:var(--green-d);margin-bottom:12px}
 .anto{font-size:.95rem;color:var(--soft)}
 /* the plain-scene hint: quieter than .ex - no box, no border, no fill.
    A hint, not a second definition. */
@@ -66,7 +65,6 @@ button{font:inherit;cursor:pointer;border-radius:5px}
 .opt{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);
   padding:12px 14px;margin-bottom:8px;color:var(--ink)}
 .opt:hover{border-color:var(--green)}
-.optlist{display:block}
 
 /* --- the three quiz mechanics --- */
 
