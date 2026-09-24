@@ -10,6 +10,8 @@ import { dayKey } from './util.js';
 const STEPS = [1, 3, 7, 16, 35, 90];
 /** The box whose interval is counted in months: a word here is known. */
 const KNOWN_BOX = 4;
+/** The highest box a word forgotten earlier in the same sitting can reach. */
+const RELEARN_BOX = 1;
 const DAY = 864e5;
 
 const today = () => dayKey();
@@ -133,16 +135,39 @@ export function reviewContext(id){
            overdue: s.next ? Math.max(0, daysBetween(s.next, t)) : 0 };
 }
 
-/** grade: 0 forgot, 1 hard, 2 good, 3 easy. */
-export function grade(id, g){
-  const s = store.getWord(id) || { box:0, right:0, wrong:0, seen:0 };
+/**
+ * What one grade does to a word's record - pure, so the rules can be tested
+ * without storage. Returns the new record and what goes into today's tally
+ * (true right, false wrong, null nothing).
+ *
+ *  - `repeat`: the word was already forgotten earlier in this sitting. A
+ *    success lifts it to box 1 at most - remembering it forty seconds after
+ *    being shown it proves nothing about next week. Normal promotion resumes
+ *    in the next sitting.
+ *
+ * grade: 0 forgot, 1 hard, 2 good, 3 easy.
+ */
+function applyGrade(rec, g, { repeat = false } = {}){
+  const s = { box:0, right:0, wrong:0, seen:0, ...rec };
   s.seen++;
-  if(g === 0){ s.wrong++; s.box = 0; }                 // forgot: back to day one
-  else { s.right++; s.box = Math.min(STEPS.length-1, s.box + (g === 1 ? 0 : g === 2 ? 1 : 2)); }
+  let tally = null;
+  if(g === 0){
+    s.box = 0;                                         // forgot: back to day one
+    s.wrong++; tally = false;
+  } else {
+    const cap = repeat ? RELEARN_BOX : STEPS.length - 1;
+    const up = g === 1 ? 0 : g === 2 ? 1 : 2;
+    s.box = Math.min(s.box + up, Math.max(s.box, cap));
+    s.right++; tally = true;
+  }
   s.next = dayKey(STEPS[s.box]);
   s.lastSeen = today();
-  store.logAnswer(g > 0);
-  return store.putWord(id, s);
+  return { rec: s, tally };
+}
+export function grade(id, g, opts){
+  const { rec, tally } = applyGrade(store.getWord(id), g, opts);
+  if(tally !== null) store.logAnswer(tally);
+  return store.putWord(id, rec);
 }
 
 /* ================= reading on a growing interval =================

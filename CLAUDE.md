@@ -45,7 +45,8 @@ due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
 between a cloze card and "what does this word mean". Reviews come in
 sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
 Forgot comes back three cards later rather than last, a second Forgot sends
-the word to tomorrow, and a sitting stops after 20 answers. The due queue
+the word to tomorrow, and a sitting stops after 20 answers. A word forgotten
+earlier in the same sitting climbs to box 1 at most, whatever the grade. The due queue
 is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
 waits at the front of tomorrow's.
 
@@ -191,7 +192,7 @@ build id, event name. Written by `telemetry.js`'s `track()`.
 | `answer` | `at` (recall/lesson/reading), `k` (mechanic), `w, ok, out` (correct/wrong/synonym), `ms, pick`, `said` when typed, `card` for a cloze card, `l` or `p, st` | every quiz answer |
 | `lesson_done` | `l, score, total` | end of a lesson quiz |
 | `reveal` | `w, mode` (cloze/meaning), `card` if a cloze card, `ms` | review, "Show answer" |
-| `grade` | `w, g, box, elapsed, overdue, ms` — measured *before* the grade | review |
+| `grade` | `w, g, box, elapsed, overdue, ms` — measured *before* the grade; `repeat: 1` when the word was already forgotten in this sitting | review |
 | `passage` | `p, w, why` (due/word/next/ahead/again) | a text is served |
 | `peek` | `w`, and `p` (passage) or `l` (lesson) | tooltip opened |
 | `say` / `audio_fail` | `w` | speaker |

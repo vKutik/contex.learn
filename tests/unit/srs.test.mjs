@@ -236,6 +236,28 @@ test('grading a word that was never opened does not throw', async () => {
   assert.equal(store.getWord(42).box, 1);
 });
 
+/* ---------- a word forgotten earlier in the same sitting ---------- */
+
+test('a word forgotten in this sitting climbs to box 1 at most, however easy it felt', async () => {
+  for(const g of [1, 2, 3]){
+    await fresh();
+    await seedWord(0, { box:3 });
+    await srs.grade(0, 0);                                  // forgotten: box 0
+    await srs.grade(0, g, { repeat:true });                 // shown again ~40 s later
+    assert.ok(store.getWord(0).box <= 1, `grade ${g} on a repeat lifted it to box ${store.getWord(0).box}`);
+  }
+  await fresh(); await seedWord(0, { box:3 });
+  await srs.grade(0, 0); await srs.grade(0, 3, { repeat:true });
+  assert.equal(store.getWord(0).box, 1, 'Easy on a repeat is box 1, not box 2');
+  assert.equal(store.getWord(0).next, dateIn(3));
+});
+
+test('normal promotion resumes in the next sitting', async () => {
+  await seedWord(0, { box:1, right:3, wrong:1 });
+  await srs.grade(0, 3);                                    // a new sitting: no repeat flag
+  assert.equal(store.getWord(0).box, 3);
+});
+
 /* ---------- the reading ladder ---------- */
 
 test('answering from the text widens the gap, missing it goes back to day one', async () => {

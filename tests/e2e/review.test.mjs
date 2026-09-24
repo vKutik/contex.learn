@@ -97,6 +97,32 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a word forgotten and then remembered in the same sitting reaches box 1, not box 2', async () => {
+    const state = due(3, { box:3 });
+    for(const w of Object.values(state.words)) w.right = 4;   // not a word that was never known
+    const page = await startReview(state);
+    const shownWord = async () => { await page.click('#show'); await page.waitForSelector('.grade');
+                                    return (await page.textContent('.card .word')).trim(); };
+    const first = await shownWord();
+    await page.click('[data-g="0"]');                        // forget the first card
+    for(let i = 0; i < 4; i++){
+      await page.waitForSelector('#show');
+      const w = await shownWord();
+      const again = w === first;
+      await page.click(`[data-g="${again ? 3 : 2}"]`);       // Easy when it comes back
+      if(again) break;
+    }
+    await page.waitForFunction(() => {
+      const p = JSON.parse(localStorage.getItem('vocab-progress'));
+      return Object.values(p.words).filter(w => w.seen === 2).length === 1;
+    });
+    const saved = await savedProgress(page);
+    const rec = Object.values(saved.words).find(w => w.seen === 2);
+    assert.equal(rec.box, 1, 'remembered forty seconds after being shown is not a week of memory');
+    assert.equal(rec.next, dateIn(3));
+    await page.close_();
+  });
+
   test('a word forgotten twice is dropped and named under "Back tomorrow"', async () => {
     const page = await startReview(due(1, { box:2 }));
     for(let i = 0; i < 2; i++){

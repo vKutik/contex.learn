@@ -275,9 +275,12 @@ routes.review = params => {
       },
       onRerender: rerender,
       onGrade: async g => {
+        // a word already forgotten in this sitting is practice, not evidence
+        const repeat = !!sess.misses[word.id];
         // measured before grading: what the interval was, not what it becomes
-        track('grade', { w: word.id, g, ...srs.reviewContext(word.id), ms: Date.now() - revealAt });
-        await srs.grade(word.id, g);
+        track('grade', { w: word.id, g, ...srs.reviewContext(word.id), ms: Date.now() - revealAt,
+          ...(repeat && { repeat: 1 }) });
+        await srs.grade(word.id, g, { repeat });
         go('review', { session: session.answer(sess, word.id, g), revealed:false });
       }
     });
