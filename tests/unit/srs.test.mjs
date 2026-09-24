@@ -304,6 +304,14 @@ test('unsettledCount counts the words still in box 0, and nothing else', async (
   assert.ok(srs.unsettledCount() > srs.BACKLOG_LIMIT, 'eleven is over the default limit of ten');
 });
 
+test('a word becomes a leech at LEECH_AT misses, not before', async () => {
+  await seedWord(0, { wrong: srs.LEECH_AT - 1 });
+  assert.equal(srs.isLeech(0), false);
+  await srs.grade(0, 0);
+  assert.equal(srs.isLeech(0), true);
+  assert.equal(srs.isLeech(99), false, 'a word never opened is not a leech');
+});
+
 /* ---------- the reading ladder ---------- */
 
 test('answering from the text widens the gap, missing it goes back to day one', async () => {

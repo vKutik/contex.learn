@@ -48,7 +48,9 @@ shelf without touching its due date, and *Another word* walks the due queue.
 **Review.** Classic spaced repetition on the cards: recall prompt, reveal,
 then one of four grades (Forgot / Hard / Good / Easy) which sets the next
 due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
-between a cloze card and "what does this word mean". Reviews come in
+between a cloze card and "what does this word mean" — except for a *leech*,
+a word missed `LEECH_AT` (5) times in all, which is always asked for its
+meaning. The word list marks leeches "tricky" and can show only them. Reviews come in
 sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
 Forgot comes back three cards later rather than last (never with fewer than
 two others between — with fewer left it waits for tomorrow), a second Forgot

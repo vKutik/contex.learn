@@ -103,6 +103,12 @@ export const BACKLOG_LIMIT = 10;
 export const unsettledCount = () =>
   Object.values(store.snapshot().words).filter(w => w.box === 0).length;
 
+/** Missed this many times in all, a word is a leech: the card is not
+ *  working for it, so the review asks for its meaning instead of the same
+ *  cloze, and the word list marks it. */
+export const LEECH_AT = 5;
+export const isLeech = id => (store.getWord(id)?.wrong || 0) >= LEECH_AT;
+
 /** Open one more batch of five right now, without moving the cap itself. */
 export const grantMore = () => store.grantNewWords();
 

@@ -295,7 +295,8 @@ routes.review = params => {
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(stageEl(), word,
     { ...session.progress(sess), revealed, fam: famOf(word.id),
-      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0 },
+      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0,
+      leech: srs.isLeech(word.id) },
     {
       onReveal: (mode, card) => {
         revealAt = Date.now();
@@ -457,8 +458,10 @@ routes.readingQuiz = ({ id }) => {
 };
 /* ---------------- word list ---------------- */
 const RANK = { started:0, read:1, known:2 };
-routes.list = () => {
-  const seen = words.filter(w => store.getWord(w.id))
+routes.list = ({ leeches = false } = {}) => {
+  const opened = words.filter(w => store.getWord(w.id));
+  const leechCount = opened.filter(w => srs.isLeech(w.id)).length;
+  const seen = opened.filter(w => !leeches || srs.isLeech(w.id))
     .sort((a,b) => RANK[srs.stepOf(a.id)] - RANK[srs.stepOf(b.id)] || a.id - b.id);
   /* Rows separated by a hairline, not a hundred bordered cards: a list is
      for scanning down, and every border the eye has to cross costs a word. */
@@ -467,6 +470,7 @@ routes.list = () => {
       <div class="ihead">
         <b>${w.word}</b>
         ${familiarityDots(famOf(w.id))}
+        ${srs.isLeech(w.id) ? `<span class="tag" title="missed ${srs.LEECH_AT} times or more">tricky</span>` : ''}
         <span class="ipos">/${w.ipa}/ · ${w.pos}</span>
         <button class="say tiny" data-say="${w.id}">🔊</button>
       </div>
@@ -475,7 +479,11 @@ routes.list = () => {
         ? `<span class="anto">opposite: ${w.opposite}</span>` : ''}</div>
     </div>`).join('') + `</div>`
     : '<div class="card muted">Nothing here yet. Open your first lesson to start.</div>';
-  screen().innerHTML = pageHead('Word list') + body;
+  // the one filter: the words the cards keep failing, and back again
+  const filter = leechCount || leeches ? `<button class="linkbtn" id="leechFilter">${leeches
+    ? 'Show all words' : `Show only tricky words (${leechCount})`}</button>` : '';
+  screen().innerHTML = pageHead('Word list') + filter + body;
+  on('leechFilter', () => go('list', { leeches: !leeches }));
   screen().querySelectorAll('[data-say]').forEach(b =>
     b.onclick = () => { const w = wordById(+b.dataset.say); say(w.id, w.word); });
   wireBack();

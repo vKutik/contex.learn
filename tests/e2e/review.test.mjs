@@ -110,6 +110,15 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
+  test('a leech is asked for its meaning, never the cloze that keeps failing it', async () => {
+    const state = due(1);                    // seen 0 would normally ask the cloze
+    state.words[0].wrong = 6;
+    const page = await startReview(state);
+    assert.match(await page.textContent('.card'), /What does this word mean\?/);
+    assert.equal(await page.$('.cloze'), null);
+    await page.close_();
+  });
+
   test('a word forgotten and then remembered in the same sitting reaches box 1, not box 2', async () => {
     const state = due(3, { box:3 });
     for(const w of Object.values(state.words)) w.right = 4;   // not a word that was never known

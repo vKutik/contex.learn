@@ -170,4 +170,34 @@ describe('home', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.waitForSelector('.card .word');
     await page.close_();
   });
+  test('a word missed five times is marked tricky, and the list can show only those', async () => {
+    const state = progress({ ids:[0,1,2] });
+    state.words[1].wrong = 5;
+    const page = await app.page(state);
+    await page.click('#list');
+    await page.waitForSelector('.list');
+    const tagged = await page.$$eval('.item', items => items
+      .filter(i => i.querySelector('.tag')).map(i => i.querySelector('b').textContent));
+    assert.equal(tagged.length, 1, 'only the word missed five times carries the badge');
+    assert.equal(await page.textContent('#leechFilter'), 'Show only tricky words (1)');
+
+    await page.click('#leechFilter');
+    await page.waitForSelector('#leechFilter');
+    await page.waitForFunction(() => document.querySelectorAll('.item').length === 1);
+    assert.equal(await page.textContent('.item b'), tagged[0]);
+    assert.equal(await page.textContent('#leechFilter'), 'Show all words');
+    await page.click('#leechFilter');
+    await page.waitForFunction(() => document.querySelectorAll('.item').length === 3);
+    assert.deepEqual(page.errors, []);
+    await page.close_();
+  });
+
+  test('no tricky words, no filter', async () => {
+    const page = await app.page(progress({ ids:[0,1,2] }));
+    await page.click('#list');
+    await page.waitForSelector('.list');
+    assert.equal(await page.$('#leechFilter'), null);
+    await page.close_();
+  });
+
 });
