@@ -44,9 +44,11 @@ then one of four grades (Forgot / Hard / Good / Easy) which sets the next
 due date from `STEPS` (1, 3, 7, 16, 35, 90 days). The prompt alternates
 between a cloze card and "what does this word mean". Reviews come in
 sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
-Forgot comes back three cards later rather than last, a second Forgot sends
-the word to tomorrow, and a sitting stops after 20 answers. A word forgotten
-earlier in the same sitting climbs to box 1 at most, whatever the grade. The due queue
+Forgot comes back three cards later rather than last (never with fewer than
+two others between — with fewer left it waits for tomorrow), a second Forgot
+sends the word to tomorrow, and a sitting stops after 20 answers. A word
+forgotten earlier in the same sitting is practice from then on: it climbs to
+box 1 at most, and adds nothing to `right`, `wrong` or the day's tally. The due queue
 is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
 waits at the front of tomorrow's.
 

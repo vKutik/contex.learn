@@ -252,6 +252,18 @@ test('a word forgotten in this sitting climbs to box 1 at most, however easy it 
   assert.equal(store.getWord(0).next, dateIn(3));
 });
 
+test('one lapse is counted once: a repeat in the same sitting adds no wrong and no tally', async () => {
+  await seedWord(0, { box:2, right:2 });
+  await srs.grade(0, 0);                                    // the real miss
+  await srs.grade(0, 0, { repeat:true });                   // tapped through again seconds later
+  assert.equal(store.getWord(0).wrong, 1);
+  assert.deepEqual(store.todayLog(), { right:0, wrong:1 });
+  await srs.grade(0, 2, { repeat:true });                   // practice, not evidence
+  assert.equal(store.getWord(0).right, 2);
+  assert.deepEqual(store.todayLog(), { right:0, wrong:1 });
+  assert.equal(store.getWord(0).seen, 3, 'every showing is still a showing');
+});
+
 test('normal promotion resumes in the next sitting', async () => {
   await seedWord(0, { box:1, right:3, wrong:1 });
   await srs.grade(0, 3);                                    // a new sitting: no repeat flag

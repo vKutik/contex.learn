@@ -140,10 +140,12 @@ export function reviewContext(id){
  * without storage. Returns the new record and what goes into today's tally
  * (true right, false wrong, null nothing).
  *
- *  - `repeat`: the word was already forgotten earlier in this sitting. A
- *    success lifts it to box 1 at most - remembering it forty seconds after
- *    being shown it proves nothing about next week. Normal promotion resumes
- *    in the next sitting.
+ *  - `repeat`: the word was already forgotten earlier in this sitting. The
+ *    answer is practice, not evidence: it counts towards neither `right` nor
+ *    `wrong` nor today's tally - one lapse is one lapse, however many times
+ *    the sitting shows it again - and a success lifts the word to box 1 at
+ *    most, since remembering it forty seconds after being shown it proves
+ *    nothing about next week. Normal promotion resumes in the next sitting.
  *
  * grade: 0 forgot, 1 hard, 2 good, 3 easy.
  */
@@ -153,12 +155,12 @@ function applyGrade(rec, g, { repeat = false } = {}){
   let tally = null;
   if(g === 0){
     s.box = 0;                                         // forgot: back to day one
-    s.wrong++; tally = false;
+    if(!repeat){ s.wrong++; tally = false; }
   } else {
     const cap = repeat ? RELEARN_BOX : STEPS.length - 1;
     const up = g === 1 ? 0 : g === 2 ? 1 : 2;
     s.box = Math.min(s.box + up, Math.max(s.box, cap));
-    s.right++; tally = true;
+    if(!repeat){ s.right++; tally = true; }
   }
   s.next = dayKey(STEPS[s.box]);
   s.lastSeen = today();

@@ -79,21 +79,34 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
   });
 
   test('Forgot brings the word back soon, in the same sitting, without growing it', async () => {
-    const page = await startReview(due(1, { box:3 }));
+    const page = await startReview(due(3, { box:3 }));
     let pill = await donePill(page);
-    assert.deepEqual(pill, { done:0, total:1 });
+    assert.deepEqual(pill, { done:0, total:3 });
 
     await page.click('#show');
     await page.waitForSelector('[data-g="0"]');
+    const forgotten = (await page.textContent('.card .word')).trim();
     await page.click('[data-g="0"]');
     await page.waitForSelector('#show', { timeout: 5000 }); // asked again, not the done screen
 
     pill = await donePill(page);
-    assert.deepEqual(pill, { done:0, total:1 },
-      'still not finished, and the total never grew past the one word due');
+    assert.deepEqual(pill, { done:0, total:3 },
+      'still not finished, and the total never grew past the three words due');
     const saved = await savedProgress(page);
-    assert.equal(saved.words['0'].box, 0);
-    assert.equal(saved.words['0'].next, dateIn(1));
+    const rec = Object.values(saved.words).find(w => w.seen === 1);
+    assert.equal(rec.box, 0);
+    assert.equal(rec.next, dateIn(1));
+
+    // two other cards come first, then the forgotten one
+    const seenNext = [];
+    for(let i = 0; i < 3; i++){
+      await page.click('#show');
+      await page.waitForSelector('.grade');
+      seenNext.push((await page.textContent('.card .word')).trim());
+      await page.click('[data-g="2"]');
+      await Promise.race([page.waitForSelector('#show'), page.waitForSelector('.pagehead h1')]);
+    }
+    assert.equal(seenNext.indexOf(forgotten), 2, `came back after two others: ${seenNext}`);
     await page.close_();
   });
 
@@ -123,13 +136,12 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
-  test('a word forgotten twice is dropped and named under "Back tomorrow"', async () => {
+  test('a forgotten word with nothing left to put between is named under "Back tomorrow"', async () => {
+    // one word alone: nothing to put between, so a single Forgot sends it to tomorrow
     const page = await startReview(due(1, { box:2 }));
-    for(let i = 0; i < 2; i++){
-      await page.click('#show');
-      await page.waitForSelector('[data-g="0"]');
-      await page.click('[data-g="0"]');
-    }
+    await page.click('#show');
+    await page.waitForSelector('[data-g="0"]');
+    await page.click('[data-g="0"]');
     await page.waitForSelector('.pagehead h1');
     assert.equal(await page.textContent('.pagehead h1'), 'Session done');
     const card = (await page.textContent('.card')).replace(/\s+/g,' ');

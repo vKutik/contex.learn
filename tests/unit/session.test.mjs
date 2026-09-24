@@ -14,7 +14,7 @@ import * as session from '../../js/session.js';
 // The spec constants session.js keeps to itself (only SESSION_SIZE is
 // exported, because only SESSION_SIZE is needed outside this module - see
 // deploy/release.test.mjs's "every export is imported by something").
-const GAP = 3, MAX_MISSES = 2, MAX_ANSWERS = 20;
+const GAP = 3, MIN_BETWEEN = 2, MAX_MISSES = 2, MAX_ANSWERS = 20;
 
 /** A tiny seeded PRNG so a "many random sequences" test is still
  *  deterministic - no two runs of the suite can disagree. */
@@ -68,11 +68,23 @@ test('a Forgot near the end of the queue lands at the end, not past it', () => {
 
 /* ---------- the miss limit ---------- */
 
+test('a miss never comes straight back: with fewer than MIN_BETWEEN cards left it waits for tomorrow', () => {
+  for(const ids of [[1], [1,2]]){
+    const state = session.answer(session.startSession(ids), 1, 0);
+    assert.deepEqual(state.dropped, [1], `${ids.length} card(s): nothing to put between, so tomorrow`);
+    assert.ok(!state.queue.includes(1));
+  }
+  const state = session.answer(session.startSession([1,2,3]), 1, 0);
+  assert.equal(state.queue.indexOf(1), MIN_BETWEEN, 'two others go before it');
+});
+
 test('a word forgotten MAX_MISSES times drops out of the sitting', () => {
-  let state = session.startSession([1]);
+  let state = session.startSession([1,2,3]);
   state = session.answer(state, 1, 0);          // 1st Forgot: still in play
   assert.equal(state.dropped.length, 0);
   assert.ok(state.queue.includes(1));
+  state = session.answer(state, 2, 2);
+  state = session.answer(state, 3, 2);
 
   state = session.answer(state, 1, 0);          // 2nd Forgot: MAX_MISSES reached
   assert.deepEqual(state.dropped, [1]);
@@ -80,12 +92,13 @@ test('a word forgotten MAX_MISSES times drops out of the sitting', () => {
 });
 
 test('a dropped word counts as finished for the counter', () => {
-  let state = session.startSession([1,2]);
+  let state = session.startSession([1,2,3]);
   state = session.answer(state, 1, 0);
   state = session.answer(state, 2, 2);          // 2: Good, finished normally
+  state = session.answer(state, 3, 2);
   state = session.answer(state, 1, 0);          // 1 drops now (2nd miss)
-  assert.deepEqual(session.progress(state), { done: 2, total: 2 });
-  assert.deepEqual(state.remembered, [2]);
+  assert.deepEqual(session.progress(state), { done: 3, total: 3 });
+  assert.deepEqual(state.remembered, [2,3]);
   assert.deepEqual(state.dropped, [1]);
 });
 

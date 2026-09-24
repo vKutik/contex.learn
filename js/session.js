@@ -16,6 +16,10 @@
 export const SESSION_SIZE = 7;
 /** A Forgot answer resurfaces this many cards later, not at the tail. */
 const GAP = 3;
+/** A miss comes back only with at least this many other cards in between;
+ *  with fewer left it waits for tomorrow instead. Shown again straight away,
+ *  in the other prompt mode, it is answered from the reveal a second ago. */
+const MIN_BETWEEN = 2;
 /** Forgotten this many times in one sitting, the word waits for tomorrow. */
 const MAX_MISSES = 2;
 /** However many cards remain, a sitting stops after this many grades. */
@@ -51,7 +55,8 @@ export const isFinished = state => state.ended;
 /**
  * Grade `wordId` and return a new state. `srs.grade()` has already been
  * called by the caller - this only shapes what the *session* does next:
- * finish the word, or send a miss back GAP cards from now.
+ * finish the word, or send a miss back GAP cards from now - or, with too few
+ * cards left to put between, to tomorrow.
  */
 export function answer(state, wordId, grade){
   if(state.ended) return state;
@@ -64,7 +69,7 @@ export function answer(state, wordId, grade){
 
   if(grade === 0){
     misses[wordId] = (misses[wordId] || 0) + 1;
-    if(misses[wordId] >= MAX_MISSES){
+    if(misses[wordId] >= MAX_MISSES || queue.length < MIN_BETWEEN){
       dropped.push(wordId);            // srs.grade(0) already booked tomorrow
     } else {
       const at = Math.min(GAP, queue.length);
