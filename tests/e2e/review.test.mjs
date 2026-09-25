@@ -10,6 +10,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { openApp, browserSkip, savedProgress } from '../helpers/browser.mjs';
 import { progress, daysAgo, dateIn } from '../helpers/seed.mjs';
+import { words } from '../../js/data/words.js';
 
 describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
   let app;
@@ -33,6 +34,23 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     assert.ok(m, `pill did not read "Done n of m": "${text}"`);
     return { done: +m[1], total: +m[2] };
   };
+
+  test('the answer side shows the plain scene while a word is unsettled, and not after', async () => {
+    const reveal = async state => {
+      const page = await startReview(state);
+      await page.click('#show');
+      await page.waitForSelector('.grade');
+      const plain = await page.$('.card .plain');
+      const text = plain && (await plain.textContent()).trim();
+      await page.close_();
+      return text;
+    };
+    assert.equal(await reveal(due(1, { box:0 })), words[0].plain, 'box 0: the picture comes back');
+    const lapsed = due(1, { box:1 }); Object.assign(lapsed.words[0], { right:1, wrong:3 });
+    assert.equal(await reveal(lapsed), words[0].plain, 'more lapses than successes: the picture too');
+    const settled = due(1, { box:2 }); Object.assign(settled.words[0], { right:3, wrong:1 });
+    assert.equal(await reveal(settled), null, 'a settled word has only its definition and sentence');
+  });
 
   test('it asks for recall before it shows anything', async () => {
     const page = await startReview(due(3));

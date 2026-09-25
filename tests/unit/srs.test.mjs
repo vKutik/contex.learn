@@ -314,6 +314,16 @@ test('unsettledCount counts the words still in box 0, and nothing else', async (
   assert.ok(srs.unsettledCount() > srs.BACKLOG_LIMIT, 'eleven is over the default limit of ten');
 });
 
+test('unsettled: box 0, or more misses than right answers - the review shows its plain scene', async () => {
+  await seedWord(0, { box:0, right:3, wrong:0 });
+  await seedWord(1, { box:1, right:1, wrong:3 });
+  await seedWord(2, { box:2, right:3, wrong:3 });
+  assert.equal(srs.unsettled(0), true, 'still on day one');
+  assert.equal(srs.unsettled(1), true, 'more lapses than successes');
+  assert.equal(srs.unsettled(2), false, 'box 2, as many right as wrong');
+  assert.equal(srs.unsettled(99), false, 'a word never opened');
+});
+
 test('a word becomes a leech at LEECH_AT misses, not before', async () => {
   await seedWord(0, { wrong: srs.LEECH_AT - 1 });
   assert.equal(srs.isLeech(0), false);

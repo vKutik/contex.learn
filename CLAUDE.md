@@ -64,7 +64,9 @@ sends the word to tomorrow, and a sitting stops after 20 answers. A word
 forgotten earlier in the same sitting is practice from then on: it stays in
 box 0, due tomorrow, and adds nothing to `right`, `wrong` or the day's tally.
 A word missed more often than answered right climbs one box per success,
-Easy or not. The due queue
+Easy or not. On the answer side, a word still in box 0 or missed more often
+than answered right (`srs.unsettled`) shows its `plain` scene again — in
+English: the course never shows the stored `translation`. The due queue
 is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
 waits at the front of tomorrow's.
 
@@ -299,7 +301,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 321 tests, about 35 seconds
+node tests/run.mjs            # 323 tests, about 35 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

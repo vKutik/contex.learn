@@ -16,8 +16,9 @@ const GRADES = [
  * @param {HTMLElement} container
  * @param {object} word
  * @param {{done:number, total:number, revealed:boolean, step:string,
- *          seen:number, fam?:object}} pos  `step` is the label of the word's
- *          step, `seen` how many times it has been reviewed
+ *          seen:number, fam?:object, plain?:boolean}} pos  `step` is the
+ *          label of the word's step, `seen` how many times it has been
+ *          reviewed, `plain` whether the answer shows the plain scene
  * @param {{onReveal:(mode:string, cardId?:string)=>void, onGrade:(g:number)=>void, onRerender:Function}} handlers
  *   `mode` is which prompt was asked: 'cloze' or 'meaning'; the second
  *   argument is the cloze card's id when one was shown.
@@ -53,7 +54,7 @@ export function renderReview(container, word, pos, handlers){
   container.innerHTML = `
     <div class="card">
       ${card ? `<div class="cloze">${filledOf(card.s, card.a)}</div>` : ''}
-      ${wordFace(word, pos.fam)}
+      ${wordFace(word, pos.fam, pos.plain)}
       <button class="say alt" data-alt>Show another example</button>
     </div>
     <p class="muted">How easily did it come back?</p>

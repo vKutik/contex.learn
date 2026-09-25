@@ -50,12 +50,13 @@ export const wordsOf = (s, answer = '') =>
    .toLowerCase().replace(/[^a-z' ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /* ---------- the plain-scene hint for abstract words ---------- */
-/** A quiet, wordless retelling of the card's first example - shown once,
- *  the very first time a word is met, so an abstract word (`cheerful`,
- *  `grief`) gets a picture the way a concrete one already has. Optional:
- *  most words have no `plain` field and this returns nothing for them. */
-const plainOf = (word, isNew) =>
-  (isNew && word.plain) ? `<div class="plain">${word.plain}</div>` : '';
+/** A quiet, wordless retelling of the card's first example - shown the
+ *  first time a word is met, and again on the review's answer side while the
+ *  word has not settled, so an abstract word (`cheerful`, `grief`) gets a
+ *  picture the way a concrete one already has - in English, never a
+ *  translation. Optional: a word with no `plain` field gets nothing. */
+const plainOf = (word, withPlain) =>
+  (withPlain && word.plain) ? `<div class="plain">${word.plain}</div>` : '';
 
 /* ---------- which example a word is showing ---------- */
 export const exampleOf = word => word.examples[store.getExample(word.id) % word.examples.length];
@@ -67,17 +68,18 @@ const nextExample = word =>
 /**
  * @param {object} word
  * @param {{level:number,cooling:boolean}} [fam] from srs.familiarity()
- * @param {boolean} [isNew] the learner is meeting this word for the first time
+ * @param {boolean} [withPlain] show the plain scene: a first meeting, or a
+ *   word that has not settled yet (srs.unsettled)
  * @returns {string} markup for the inside of a card
  */
-export const wordFace = (word, fam, isNew = false) => `
+export const wordFace = (word, fam, withPlain = false) => `
   <div class="word">${word.word}${fam ? familiarityDots(fam) : ''}</div>
   <div class="pos">/${word.ipa}/ · ${word.pos}</div>
   <button class="say" data-say>🔊 listen</button>
   <!-- word.translation exists on every word (see js/data/words.js) but is
        hidden in the UI for now, per request - data stays, display doesn't. -->
   <div class="def">${word.definition}</div>
-  ${plainOf(word, isNew)}
+  ${plainOf(word, withPlain)}
   <div class="ex">${markedOf(exampleOf(word))}</div>
   ${word.opposite !== '—' ? `<div class="anto">opposite: ${word.opposite}</div>` : ''}
   <div class="exnav">example ${exampleNo(word)} of ${word.examples.length}</div>`;

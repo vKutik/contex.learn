@@ -301,7 +301,8 @@ routes.review = params => {
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(stageEl(), word,
     { ...session.progress(sess), revealed, fam: famOf(word.id),
-      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0 },
+      step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0,
+      plain: srs.unsettled(word.id) },
     {
       onReveal: (mode, card) => {
         revealAt = activeNow();

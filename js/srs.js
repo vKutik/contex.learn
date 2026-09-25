@@ -103,6 +103,14 @@ export const BACKLOG_LIMIT = 10;
 export const unsettledCount = () =>
   Object.values(store.snapshot().words).filter(w => w.box === 0).length;
 
+/** Not settled yet: still in box 0, or missed more often than answered
+ *  right. The review's answer side shows its plain scene again - an English
+ *  definition alone was not landing for these words. */
+export const unsettled = id => {
+  const w = store.getWord(id);
+  return !!w && ((w.box || 0) === 0 || (w.wrong || 0) > (w.right || 0));
+};
+
 /** A leech - "tricky" in the word list - is a word missed LEECH_AT times in
  *  all that has not yet climbed back to LEECH_CLEAR_BOX. It is a state, not a
  *  sentence: reaching box 3 clears it, dropping below box 3 brings it back.
