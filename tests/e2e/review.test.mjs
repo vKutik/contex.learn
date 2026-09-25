@@ -124,7 +124,7 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     await page.close_();
   });
 
-  test('a word forgotten and then remembered in the same sitting reaches box 1, not box 2', async () => {
+  test('a word forgotten and then remembered in the same sitting stays in box 0, due tomorrow', async () => {
     const state = due(3, { box:3 });
     for(const w of Object.values(state.words)) w.right = 4;   // not a word that was never known
     const page = await startReview(state);
@@ -145,8 +145,8 @@ describe('review', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     });
     const saved = await savedProgress(page);
     const rec = Object.values(saved.words).find(w => w.seen === 2);
-    assert.equal(rec.box, 1, 'remembered forty seconds after being shown is not a week of memory');
-    assert.equal(rec.next, dateIn(3));
+    assert.equal(rec.box, 0, 'remembered forty seconds after being shown is not three days of memory');
+    assert.equal(rec.next, dateIn(1));
     await page.close_();
   });
 

@@ -19,6 +19,7 @@ import { clozeFor } from '../data.js';
 import { typesCloze } from '../settings.js';
 import * as store from '../storage.js';
 import { isLeech, trickyCard } from '../srs.js';
+import { activeNow } from '../telemetry.js';
 
 /* ---------- small helpers ---------- */
 const matchCase = (text, model) => !text ? text
@@ -396,7 +397,7 @@ export function runQuiz(container, questions, handlers){
 
     // the screen itself already animated the first question in
     if(firstDraw) firstDraw = false; else easeIn(container);
-    const shownAt = Date.now();
+    const shownAt = activeNow();
 
     /* Both ways of answering end here: feedback, the record, then move on. */
     function settle(outcome, said, pick = null){
@@ -409,7 +410,7 @@ export function runQuiz(container, questions, handlers){
       note.hidden = !note.innerHTML;
 
       handlers.onAnswer?.(q, outcome === 'correct', outcome,
-        { ms: Date.now() - shownAt, pick, ...(pick === null && { said: String(said).slice(0, 40) }) });
+        { ms: activeNow() - shownAt, pick, ...(pick === null && { said: String(said).slice(0, 40) }) });
 
       // auto-advance, or sooner if they tap anywhere once they have read it
       const next = () => { container.onclick = null; clearTimeout(timer); i++; draw(); };

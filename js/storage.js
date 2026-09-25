@@ -10,7 +10,8 @@
  *   rw    : { [wordId]: 1 }   answered correctly inside a passage
  *   read  : { [passageId]: 1 }
  *   lesson: { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
- *   rsched: { [wordId]: { step, next } }  when this word is next due a text
+ *   rsched: { [wordId]: { step, next, at? } }  when this word is next due a text,
+ *           and the day its last text was graded
  *   log   : { 'YYYY-MM-DD': { right, wrong } }  answers per local day
  *   grants: [ timestamp ]  each +5 words tap, one extra batch apiece
  *   clozeSeen : { [wordId]: [cardId] }  the last five cloze cards met, oldest first

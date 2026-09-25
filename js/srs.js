@@ -10,8 +10,8 @@ import { dayKey } from './util.js';
 const STEPS = [1, 3, 7, 16, 35, 90];
 /** The box whose interval is counted in months: a word here is known. */
 const KNOWN_BOX = 4;
-/** The highest box a word can reach on a success that follows a miss - in
- *  the same sitting, or with no right answer ever to set against it. */
+/** The highest box a word can reach on its first success after misses with
+ *  no right answer ever to set against them. */
 const RELEARN_BOX = 1;
 const DAY = 864e5;
 
@@ -157,8 +157,8 @@ export function introduce(id){
   if(!s.new) s.new = Date.now();
   s.next = dayKey(STEPS[0]);
   s.lastSeen = today();
-  // the lesson was the first meeting; the first text is offered straight away,
-  // and only then do the intervals start growing
+  // the reading plan starts today, but a text is only asked for once the word
+  // has settled in the reviews (READ_MIN_BOX) - see readingDue
   if(!store.readingPlan(id)) store.setReadingPlan(id, { step:0, next: today() });
   return store.putWord(id, s);
 }
@@ -184,13 +184,16 @@ export function reviewContext(id){
  *  - `repeat`: the word was already forgotten earlier in this sitting. The
  *    answer is practice, not evidence: it counts towards neither `right` nor
  *    `wrong` nor today's tally - one lapse is one lapse, however many times
- *    the sitting shows it again - and a success lifts the word to box 1 at
- *    most, since remembering it forty seconds after being shown it proves
- *    nothing about next week. Normal promotion resumes in the next sitting.
+ *    the sitting shows it again - and a success leaves the word in box 0,
+ *    due tomorrow: remembering it forty seconds after being shown it proves
+ *    nothing about next week, and even box 1 is three days away. Normal
+ *    promotion resumes in the next sitting.
  *  - a word that has been missed and never yet answered right - a miss in
  *    the lesson's recall counts - climbs at most to box 1 on its first
  *    success: its first review is where it is learned, not where it is
  *    confirmed.
+ *  - a word missed more often than it was answered right climbs one box at
+ *    a time, Easy or not: one good day does not outweigh a record of lapses.
  *
  * grade: 0 forgot, 1 hard, 2 good, 3 easy.
  */
@@ -202,8 +205,9 @@ function applyGrade(rec, g, { repeat = false } = {}){
     s.box = 0;                                         // forgot: back to day one
     if(!repeat){ s.wrong++; tally = false; }
   } else {
-    const cap = repeat || (s.right === 0 && s.wrong > 0) ? RELEARN_BOX : STEPS.length - 1;
-    const up = g === 1 ? 0 : g === 2 ? 1 : 2;
+    const cap = repeat ? 0
+              : s.right === 0 && s.wrong > 0 ? RELEARN_BOX : STEPS.length - 1;
+    const up = g === 1 ? 0 : g === 2 || s.wrong > s.right ? 1 : 2;
     s.box = Math.min(s.box + up, Math.max(s.box, cap));
     if(!repeat){ s.right++; tally = true; }
   }
@@ -240,6 +244,24 @@ export function recallAnswer(id, ok){
  * the schedule honest rather than decorative.
  */
 const READ_STEPS = [1, 3, 7, 16, 35, 90, 180];
+/** A word is asked for a text only from this review box on: before that it
+ *  is still being learned from its card, and a passage it cannot yet carry
+ *  is a text scrolled past, not read. */
+const READ_MIN_BOX = 2;
+/** The schedule asks for at most this many texts a day. A backlog of eighty
+ *  says nothing but "too much"; three is a thing to do. Reading more is
+ *  always allowed - it is just not asked for. */
+export const READ_DAILY = 3;
+
+const readyToRead = id => (store.getWord(id)?.box || 0) >= READ_MIN_BOX;
+
+/** Texts left for today: READ_DAILY less the words whose reading was graded
+ *  today, whatever sent the learner to them. */
+export const readsLeftToday = () => {
+  const t = today();
+  const done = [...introducedIds()].filter(id => store.readingPlan(id)?.at === t).length;
+  return Math.max(0, READ_DAILY - done);
+};
 
 /** Every open word with a reading plan, in the order the schedule wants
  *  them: the most overdue first, then whichever is closest to its turn.
@@ -251,16 +273,20 @@ export function readingOrder(){
     .sort((a,b) => next(a) < next(b) ? -1 : next(a) > next(b) ? 1 : a - b);
 }
 
-/** Words whose next text is due today or overdue, most overdue first. */
+/** Words whose next text is due today or overdue, most overdue first -
+ *  only words settled enough to read for, and no more than today has left. */
 export const readingDue = () => {
   const t = today();
-  return readingOrder().filter(id => store.readingPlan(id).next <= t);
+  return readingOrder()
+    .filter(id => readyToRead(id) && store.readingPlan(id).next <= t)
+    .slice(0, readsLeftToday());
 };
 
 /** How long until the next word is due a text, in days; null if none waiting. */
 export function nextReadingIn(){
   const t = today();
   const waits = [...introducedIds()]
+    .filter(readyToRead)
     .map(id => store.readingPlan(id))
     .filter(Boolean)
     .map(plan => -daysBetween(plan.next, t))
@@ -272,7 +298,8 @@ export function nextReadingIn(){
 export function gradeReading(id, ok){
   const plan = store.readingPlan(id) || { step:0, next: today() };
   const step = ok ? Math.min(READ_STEPS.length - 1, plan.step + 1) : 0;
-  return store.setReadingPlan(id, { step, next: dayKey(READ_STEPS[step]) });
+  // `at` is the day it was graded: what readsLeftToday counts
+  return store.setReadingPlan(id, { step, next: dayKey(READ_STEPS[step]), at: today() });
 }
 
 /** Days a word is overdue for its next text, 0 when it is not. */

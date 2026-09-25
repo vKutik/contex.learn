@@ -65,7 +65,7 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
   });
 
   test('a tooltip lookup in reading practice names the passage it happened in', async () => {
-    const page = await app.page(progress({ ids:[0,1,2,3,4], reading: daysAgo(1) }));
+    const page = await app.page(progress({ ids:[0,1,2,3,4], reading: daysAgo(1), box:2 }));
     await page.click('#reading');
     await page.waitForSelector('.story mark');
     await page.click('.story mark');
@@ -91,6 +91,32 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
     assert.ok(['cloze', 'meaning'].includes(reveal.mode));
     assert.deepEqual({ w: grade.w, g: grade.g, box: grade.box, elapsed: grade.elapsed, overdue: grade.overdue },
       { w: 0, g: 2, box: 1, elapsed: 1, overdue: 1 }, 'the grade must be logged against the old interval');
+    await page.close_();
+  });
+
+  test('time spent in another app is not counted as time spent on the card', async () => {
+    const page = await app.page(progress({ ids:[0], next: daysAgo(1), box: 1 }));
+    await page.click('#review');
+    await page.waitForSelector('#show');
+    // a five-minute trip away: hidden, the clock jumps on, visible again
+    const away = () => page.evaluate(() => {
+      const set = s => { Object.defineProperty(document, 'visibilityState', { configurable:true, get: () => s });
+                         document.dispatchEvent(new Event('visibilitychange')); };
+      set('hidden');
+      const before = Date.now;
+      Date.now = () => before() + 5 * 60e3;
+      set('visible');
+    });
+    await away();                                   // on the prompt
+    await page.click('#show');
+    await page.waitForSelector('.grade');
+    await away();                                   // on the answer
+    await page.click('[data-g="2"]');
+    const { events } = await savedEvents(page, has('grade'));
+    const reveal = events.find(x => x.e === 'reveal');
+    const grade = events.find(x => x.e === 'grade');
+    assert.ok(reveal.ms >= 0 && reveal.ms < 60e3, `the reveal counted the trip away: ${reveal.ms} ms`);
+    assert.ok(grade.ms >= 0 && grade.ms < 60e3, `the grade counted the trip away: ${grade.ms} ms`);
     await page.close_();
   });
 
@@ -244,7 +270,7 @@ describe('usage log', { skip: browserSkip ?? false, concurrency: 1 }, () => {
   });
 
   test('nothing the app does sends a request anywhere but its own origin', async () => {
-    const page = await app.page(progress({ ids:[0,1,2,3,4], reading: daysAgo(1), next: daysAgo(1) }));
+    const page = await app.page(progress({ ids:[0,1,2,3,4], reading: daysAgo(1), next: daysAgo(1), box:2 }));
     await page.click('#reading');
     await page.waitForSelector('.story mark');
     await page.click('.story mark');

@@ -27,6 +27,19 @@ export function track(e, data = {}){
   store.appendEvent({ t: Date.now(), s: SESSION, b: BUILD, e, ...data });
 }
 
+/* ---------- a clock that stops while the app is away ----------
+   A reveal or a grade measured with Date.now() across a trip to another app
+   came out as five minutes of "thinking". This clock stands still while the
+   page is hidden, so every `ms` in the log is time the learner could see the
+   card. Durations only: subtract two readings, never show one. */
+let awaySince = null, awayTotal = 0;
+if(typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden'){ if(awaySince === null) awaySince = Date.now(); }
+  else if(awaySince !== null){ awayTotal += Date.now() - awaySince; awaySince = null; }
+});
+export const activeNow = () =>
+  Date.now() - awayTotal - (awaySince === null ? 0 : Date.now() - awaySince);
+
 /* ---------- things nobody calls track() for ---------- */
 
 /** A thrown error or rejected promise nobody caught - on the live site that

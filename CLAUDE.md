@@ -41,7 +41,9 @@ filled button, the lesson one ghost tap away.
 
 **Reading practice.** Every word owns a shelf of **ten** passages. The
 schedule brings one word back per interval (1, 3, 7, 16, 35, 90, 180 days,
-resetting to the first rung on a miss). Separately from the schedule, the
+resetting to the first rung on a miss) — but only once the word has reached
+review box 2 (`READ_MIN_BOX`), and never more than `READ_DAILY` (3) texts a
+day, counting every text graded today. Separately from the schedule, the
 learner can always read more: *Another text for `<word>`* walks that word's
 shelf without touching its due date, and *Another word* walks the due queue.
 
@@ -59,8 +61,10 @@ sittings of seven (`session.js`): the "Done x of 7" counter only goes up, a
 Forgot comes back three cards later rather than last (never with fewer than
 two others between — with fewer left it waits for tomorrow), a second Forgot
 sends the word to tomorrow, and a sitting stops after 20 answers. A word
-forgotten earlier in the same sitting is practice from then on: it climbs to
-box 1 at most, and adds nothing to `right`, `wrong` or the day's tally. The due queue
+forgotten earlier in the same sitting is practice from then on: it stays in
+box 0, due tomorrow, and adds nothing to `right`, `wrong` or the day's tally.
+A word missed more often than answered right climbs one box per success,
+Easy or not. The due queue
 is capped by the daily answer budget (`DAILY_BUDGET`, 80); what does not fit
 waits at the front of tomorrow's.
 
@@ -184,7 +188,7 @@ ex     { [wordId]: index of the example last shown }
 rw     { [wordId]: 1 }        proved correct from inside a passage
 read   { [passageId]: 1 }
 lesson { [lessonId]: 'recall' | 'reading' | 'quiz' | 'done' }
-rsched { [wordId]: { step, next } }   when this word is next due a text
+rsched { [wordId]: { step, next, at? } }   when this word is next due a text; `at` the day its last was graded
 log    { 'YYYY-MM-DD': { right, wrong } }   keyed by the learner's local day
 grants [ timestamp ]          each "+5 words" tap, one extra batch apiece
 clozeSeen  { [wordId]: [cardId] }   last five cloze cards met, oldest first
@@ -216,7 +220,8 @@ build id, event name. Written by `telemetry.js`'s `track()`.
 | `stale_reload` | `to` | fresh.js |
 | `error` | `msg, at, stack` | uncaught error or rejection, 20 a sitting |
 
-`pick` is the tapped option's index in `q.options` before shuffling (null
+Every `ms` is measured on `activeNow()` (`telemetry.js`), a clock that
+stops while the page is hidden. `pick` is the tapped option's index in `q.options` before shuffling (null
 when the answer was typed), so `q.correctIndex` (0 for every generated
 mechanic) says whether and what it missed. The log is never read by `srs.js`; a progress reset leaves it alone.
 Nothing in `js/` may reach the network except `fresh.js`'s version check —
@@ -294,7 +299,7 @@ codebase survived because they looked correct in the source.
 **Run the gate before every deploy.**
 
 ```bash
-node tests/run.mjs            # 314 tests, about 35 seconds
+node tests/run.mjs            # 321 tests, about 35 seconds
 ```
 
 Four suites, cheapest first: `unit/` for the logic, `data/` for the contract

@@ -15,7 +15,8 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
   before(async () => { app = await openApp(); });
   after(async () => { await app.close(); });
 
-  const open = (over = {}) => progress({ ids:[0,1,2,3,4], reading: daysAgo(1), ...over });
+  // settled words: the schedule asks for texts only from box 2
+  const open = (over = {}) => progress({ ids:[0,1,2,3,4], reading: daysAgo(1), box:2, ...over });
 
   const startReading = async state => {
     const page = await app.page(state);
@@ -130,7 +131,7 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
   });
 
   test('with nothing due it says so, and still lets the learner read on', async () => {
-    const page = await app.page(progress({ ids:[0,1], reading: dateIn(4) }));
+    const page = await app.page(progress({ ids:[0,1], reading: dateIn(4), box:2 }));
     await page.click('#reading');
     await page.waitForSelector('.card');
     assert.match(await page.textContent('.def'), /brings the next word back in 4 days/);
@@ -141,8 +142,36 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
     await page.click('#ahead');
     await page.waitForSelector('.story');
     assert.deepEqual((await savedProgress(page)).rsched,
-      progress({ ids:[0,1], reading: dateIn(4) }).rsched,
+      progress({ ids:[0,1], reading: dateIn(4), box:2 }).rsched,
       'reading ahead of schedule must not change the schedule');
+    await page.close_();
+  });
+
+  test('the schedule asks for three texts, then says so and still lets the learner read on', async () => {
+    const page = await startReading(open());
+    assert.match(await page.textContent('.muted'), /· 2 more waiting/, 'three of five due words, not five');
+    for(let i = 0; i < 3; i++){
+      await page.click('#quiz');
+      await page.waitForSelector('[data-k]');
+      await answer(page, 0);
+      await page.waitForSelector('#another');
+      await page.click('#another');
+      await page.waitForSelector('.story');
+    }
+    await page.click('[data-back]');
+    await page.waitForSelector('#reading');
+    await page.click('#reading');
+    await page.waitForSelector('.def');
+    assert.match(await page.textContent('.def'), /today's 3 texts/);
+    assert.ok(await page.$('#ahead'), 'reading more is still one tap away');
+    await page.close_();
+  });
+
+  test('a word still learning from its card is not asked for a text', async () => {
+    const page = await app.page(progress({ ids:[0,1], reading: daysAgo(1), box:1 }));
+    await page.click('#reading');
+    await page.waitForSelector('.def');
+    assert.match(await page.textContent('.def'), /two reviews/);
     await page.close_();
   });
 
@@ -170,7 +199,7 @@ describe('reading practice', { skip: browserSkip ?? false, concurrency: 1 }, () 
     const settled = await quiet.$eval('.story mark[data-word="shallow"]', m => m.className);
     await quiet.close_();
 
-    const fresh = await app.page(progress({ ids:[0], reading: daysAgo(1) }));
+    const fresh = await app.page(progress({ ids:[0], reading: daysAgo(1), box:2 }));
     await fresh.click('#reading');
     await fresh.waitForSelector('.story mark');
     const newish = await fresh.$eval('.story mark[data-word="shallow"]', m => m.className);

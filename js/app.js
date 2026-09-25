@@ -20,7 +20,7 @@ import { hideTooltip } from './components/tooltip.js';
 import { paint, easeIn } from './components/motion.js';
 import { shuffle, one, plural } from './util.js';
 import { watchForNewBuild } from './fresh.js';
-import { track, startTelemetry, summarize, exportLog } from './telemetry.js';
+import { track, startTelemetry, summarize, exportLog, activeNow } from './telemetry.js';
 const screen = () => document.getElementById('screen');
 /** The part of a screen a component renders into. */
 const stageEl = () => screen().querySelector('#stage');
@@ -274,7 +274,8 @@ function lessonQuiz(lesson, ws){
 }
 /* ---------------- review ---------------- */
 /* When the prompt went up and when the answer was shown: how long recall
-   took, and how long the grade took after it, for the usage log. */
+   took, and how long the grade took after it, for the usage log - on the
+   clock that stops while the app is in the background. */
 let promptAt = 0, revealAt = 0;
 routes.review = params => {
   const { session: sess, revealed } = params;
@@ -296,14 +297,14 @@ routes.review = params => {
     return wireBack();
   }
   const word = wordById(session.current(sess));
-  if(!revealed) promptAt = Date.now();
+  if(!revealed) promptAt = activeNow();
   screen().innerHTML = '<div id="stage"></div>';
   renderReview(stageEl(), word,
     { ...session.progress(sess), revealed, fam: famOf(word.id),
       step: srs.STEP_NAME[srs.stepOf(word.id)], seen: store.getWord(word.id)?.seen || 0 },
     {
       onReveal: (mode, card) => {
-        revealAt = Date.now();
+        revealAt = activeNow();
         track('reveal', { w: word.id, mode, ...(card && { card }), ms: revealAt - promptAt });
         go('review', { ...params, revealed:true });
       },
@@ -312,7 +313,7 @@ routes.review = params => {
         // a word already forgotten in this sitting is practice, not evidence
         const repeat = !!sess.misses[word.id];
         // measured before grading: what the interval was, not what it becomes
-        track('grade', { w: word.id, g, ...srs.reviewContext(word.id), ms: Date.now() - revealAt,
+        track('grade', { w: word.id, g, ...srs.reviewContext(word.id), ms: activeNow() - revealAt,
           ...(repeat && { repeat: 1 }) });
         await srs.grade(word.id, g, { repeat });
         go('review', { session: session.answer(sess, word.id, g), revealed:false });
@@ -372,11 +373,16 @@ function readingRested(){
   const days = srs.nextReadingIn();
   const open = [...srs.introducedIds()];
   const spare = open.reduce((n, id) => n + shelfOf(id).length - textsRead(id), 0);
+  const why = !srs.readsLeftToday()
+      ? `That was today's ${srs.READ_DAILY} texts. The schedule asks for more tomorrow.`
+    : days
+      ? `The schedule brings the next word back ${days === 1 ? 'tomorrow' : `in ${days} days`}.`
+    : open.length
+      ? 'A word is asked for a text once it has come back right in two reviews.'
+      : 'Open some words first and their texts will start arriving here.';
   screen().innerHTML = pageHead('Reading practice') + `
     <div class="card">
-      <p class="def">${days
-        ? `The schedule brings the next word back ${days === 1 ? 'tomorrow' : `in ${days} days`}.`
-        : 'Open some words first and their texts will start arriving here.'}</p>
+      <p class="def">${why}</p>
       ${open.length ? `<p class="muted">Nothing is <em>due</em> - but
         ${plural(spare, 'more text')} ${spare === 1 ? 'is' : 'are'} sitting on the shelves
         of the words you have already opened. Reading them costs you nothing:

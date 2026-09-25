@@ -238,18 +238,15 @@ test('grading a word that was never opened does not throw', async () => {
 
 /* ---------- a word forgotten earlier in the same sitting ---------- */
 
-test('a word forgotten in this sitting climbs to box 1 at most, however easy it felt', async () => {
+test('a word forgotten in this sitting stays in box 0 and is due tomorrow, however easy it felt', async () => {
   for(const g of [1, 2, 3]){
     await fresh();
-    await seedWord(0, { box:3 });
+    await seedWord(0, { box:3, right:4 });
     await srs.grade(0, 0);                                  // forgotten: box 0
     await srs.grade(0, g, { repeat:true });                 // shown again ~40 s later
-    assert.ok(store.getWord(0).box <= 1, `grade ${g} on a repeat lifted it to box ${store.getWord(0).box}`);
+    assert.equal(store.getWord(0).box, 0, `grade ${g} on a repeat lifted it to box ${store.getWord(0).box}`);
+    assert.equal(store.getWord(0).next, dateIn(1), 'box 1 would be three days away - tomorrow instead');
   }
-  await fresh(); await seedWord(0, { box:3 });
-  await srs.grade(0, 0); await srs.grade(0, 3, { repeat:true });
-  assert.equal(store.getWord(0).box, 1, 'Easy on a repeat is box 1, not box 2');
-  assert.equal(store.getWord(0).next, dateIn(3));
 });
 
 test('one lapse is counted once: a repeat in the same sitting adds no wrong and no tally', async () => {
@@ -262,6 +259,19 @@ test('one lapse is counted once: a repeat in the same sitting adds no wrong and 
   assert.equal(store.getWord(0).right, 2);
   assert.deepEqual(store.todayLog(), { right:0, wrong:1 });
   assert.equal(store.getWord(0).seen, 3, 'every showing is still a showing');
+});
+
+test('a word missed more often than answered right climbs one box at a time', async () => {
+  await seedWord(0, { box:0, right:2, wrong:6 });           // the record the log showed for "bare"
+  await srs.grade(0, 3);
+  assert.equal(store.getWord(0).box, 1, 'Easy on a word with six lapses is box 1, not box 2');
+  assert.equal(store.getWord(0).next, dateIn(3));
+  await seedWord(1, { box:2, right:3, wrong:4 });
+  await srs.grade(1, 2);
+  assert.equal(store.getWord(1).box, 3, 'Good still moves it one box');
+  await seedWord(2, { box:1, right:3, wrong:3 });
+  await srs.grade(2, 3);
+  assert.equal(store.getWord(2).box, 3, 'as many right as wrong: Easy skips an interval again');
 });
 
 test('normal promotion resumes in the next sitting', async () => {
@@ -360,7 +370,7 @@ test('answering from the text widens the gap, missing it goes back to day one', 
 });
 
 test('readingDue lists overdue words first', async () => {
-  for(const id of [0,1,2]) await seedWord(id);
+  for(const id of [0,1,2]) await seedWord(id, { box:2 });
   await store.setReadingPlan(0, { step:0, next: daysAgo(1) });
   await store.setReadingPlan(1, { step:0, next: daysAgo(30) });
   await store.setReadingPlan(2, { step:0, next: dateIn(5) });
@@ -378,8 +388,38 @@ test('readingOrder lists every planned word, closest to its turn first', async (
   assert.deepEqual(srs.readingOrder(), [2,1,3,0], 'overdue, then soonest; ties by id');
 });
 
+test('readingDue asks only for words that reached box 2', async () => {
+  for(const id of [0,1,2,3]) await seedWord(id, { box: id });
+  for(const id of [0,1,2,3]) await store.setReadingPlan(id, { step:0, next: daysAgo(1) });
+  assert.deepEqual(srs.readingDue(), [2,3], 'box 0 and 1 are still learning from the card');
+});
+
+test('readingDue asks for three texts a day at most, and reading any text uses one up', async () => {
+  for(let id = 0; id < 8; id++){
+    await seedWord(id, { box:2 });
+    await store.setReadingPlan(id, { step:0, next: daysAgo(8 - id) });
+  }
+  assert.equal(srs.READ_DAILY, 3);
+  assert.deepEqual(srs.readingDue(), [0,1,2], 'the three most overdue, not all eight');
+  await srs.gradeReading(0, true);
+  assert.deepEqual(srs.readingDue(), [1,2]);
+  await srs.gradeReading(7, false);                        // read ahead of its turn: still a text today
+  assert.deepEqual(srs.readingDue(), [1]);
+  await srs.gradeReading(1, true);
+  assert.deepEqual(srs.readingDue(), [], 'three today: the schedule has finished asking');
+  assert.equal(srs.readsLeftToday(), 0);
+});
+
+test('a text graded on an earlier day does not count against today', async () => {
+  await seedWord(0, { box:2 });
+  await store.setReadingPlan(0, { step:1, next: daysAgo(1), at: daysAgo(3) });
+  assert.equal(srs.readsLeftToday(), srs.READ_DAILY);
+  assert.deepEqual(srs.readingDue(), [0]);
+});
+
 test('nextReadingIn is the shortest wait, and null when something is already due', async () => {
-  await seedWord(0); await seedWord(1);
+  await seedWord(0, { box:2 }); await seedWord(1, { box:2 }); await seedWord(2, { box:1 });
+  await store.setReadingPlan(2, { step:0, next: dateIn(1) });  // not settled: not a wait either
   await store.setReadingPlan(0, { step:0, next: dateIn(9) });
   await store.setReadingPlan(1, { step:0, next: dateIn(4) });
   assert.equal(srs.nextReadingIn(), 4);
